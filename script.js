@@ -18,8 +18,14 @@ const columns = Array.from(document.querySelectorAll(".column"));
 const navLinks = Array.from(document.querySelectorAll(".nav-link"));
 const viewPanels = Array.from(document.querySelectorAll("[data-view-panel]"));
 const todayContent = document.getElementById("today-content");
+const backlogContent = document.getElementById("backlog-content");
+const backlogSearchInput = document.getElementById("backlog-search-input");
+const backlogCountEl = document.getElementById("backlog-count");
+const viewModeBtns = Array.from(document.querySelectorAll(".view-mode-btn"));
 
 let boardState = loadState();
+let backlogGroupMode = "schedule"; // "schedule" or "effort"
+let backlogSearchQuery = "";
 let focusMode = false;
 let focusIndex = 0;
 let activeView = "board";
@@ -659,6 +665,318 @@ function renderToday() {
   if (dueTodaySection) todayContent.appendChild(dueTodaySection);
 }
 
+// ==================== BACKLOG VIEW ====================
+
+function getBacklogTasks() {
+  // Backlog = todo tasks that aren't due today or overdue (those show in Today view)
+  return boardState.tasks.filter((task) => {
+    if (task.status !== "todo") return false;
+    if (isDueToday(task.dueDate)) return false;
+    if (isOverdue(task.dueDate)) return false;
+    return true;
+  });
+}
+
+function isThisWeek(dueDate) {
+  if (!dueDate) return false;
+  const due = new Date(dueDate);
+  if (Number.isNaN(due.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endOfWeek = new Date(today);
+  endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  return dueDay > today && dueDay <= endOfWeek;
+}
+
+function isNextWeek(dueDate) {
+  if (!dueDate) return false;
+  const due = new Date(dueDate);
+  if (Number.isNaN(due.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endOfThisWeek = new Date(today);
+  endOfThisWeek.setDate(today.getDate() + (7 - today.getDay()));
+  const endOfNextWeek = new Date(endOfThisWeek);
+  endOfNextWeek.setDate(endOfThisWeek.getDate() + 7);
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  return dueDay > endOfThisWeek && dueDay <= endOfNextWeek;
+}
+
+function isLater(dueDate) {
+  if (!dueDate) return false;
+  const due = new Date(dueDate);
+  if (Number.isNaN(due.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endOfNextWeek = new Date(today);
+  endOfNextWeek.setDate(today.getDate() + (14 - today.getDay()));
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  return dueDay > endOfNextWeek;
+}
+
+function renderBacklog() {
+  if (!backlogContent) return;
+  backlogContent.innerHTML = "";
+
+  const allBacklogTasks = getBacklogTasks();
+
+  // Apply search filter
+  const searchTerm = backlogSearchQuery.toLowerCase().trim();
+  const filteredTasks = searchTerm
+    ? allBacklogTasks.filter((task) =>
+        task.title.toLowerCase().includes(searchTerm) ||
+        (task.description && task.description.toLowerCase().includes(searchTerm))
+      )
+    : allBacklogTasks;
+
+  // Update count
+  if (backlogCountEl) {
+    backlogCountEl.textContent = `${filteredTasks.length} item${filteredTasks.length !== 1 ? "s" : ""}`;
+  }
+
+  // Empty state
+  if (filteredTasks.length === 0) {
+    const emptyState = document.createElement("div");
+    emptyState.className = "backlog-empty";
+    emptyState.innerHTML = searchTerm
+      ? `
+        <div class="backlog-empty-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.3-4.3"></path>
+          </svg>
+        </div>
+        <h3 class="backlog-empty-title">No matches found</h3>
+        <p class="backlog-empty-text">Try adjusting your search terms</p>
+      `
+      : `
+        <div class="backlog-empty-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+          </svg>
+        </div>
+        <h3 class="backlog-empty-title">Backlog is empty</h3>
+        <p class="backlog-empty-text">Tasks without urgent due dates will appear here for planning</p>
+      `;
+    backlogContent.appendChild(emptyState);
+    return;
+  }
+
+  // Group tasks based on mode
+  if (backlogGroupMode === "schedule") {
+    renderBacklogBySchedule(filteredTasks);
+  } else {
+    renderBacklogByEffort(filteredTasks);
+  }
+}
+
+function renderBacklogBySchedule(tasks) {
+  const thisWeek = tasks.filter((t) => isThisWeek(t.dueDate));
+  const nextWeek = tasks.filter((t) => isNextWeek(t.dueDate));
+  const later = tasks.filter((t) => isLater(t.dueDate));
+  const unscheduled = tasks.filter((t) => !t.dueDate);
+
+  const sections = [
+    { title: "This Week", tasks: thisWeek, icon: "this-week", iconSvg: calendarIcon() },
+    { title: "Next Week", tasks: nextWeek, icon: "next-week", iconSvg: calendarNextIcon() },
+    { title: "Later", tasks: later, icon: "later", iconSvg: calendarLaterIcon() },
+    { title: "Unscheduled", tasks: unscheduled, icon: "unscheduled", iconSvg: inboxIcon() },
+  ];
+
+  sections.forEach((section) => {
+    if (section.tasks.length > 0) {
+      backlogContent.appendChild(createBacklogSection(section));
+    }
+  });
+}
+
+function renderBacklogByEffort(tasks) {
+  const quickWins = tasks.filter((t) => t.effort === "15m" || t.effort === "30m");
+  const medium = tasks.filter((t) => t.effort === "1h");
+  const deepWork = tasks.filter((t) => t.effort === "2h");
+  const noEstimate = tasks.filter((t) => !t.effort);
+
+  const sections = [
+    { title: "Quick Wins", tasks: quickWins, icon: "quick-wins", iconSvg: boltIcon() },
+    { title: "Medium Tasks", tasks: medium, icon: "medium", iconSvg: clockIcon() },
+    { title: "Deep Work", tasks: deepWork, icon: "deep-work", iconSvg: flameIcon() },
+    { title: "No Estimate", tasks: noEstimate, icon: "no-estimate", iconSvg: questionIcon() },
+  ];
+
+  sections.forEach((section) => {
+    if (section.tasks.length > 0) {
+      backlogContent.appendChild(createBacklogSection(section));
+    }
+  });
+}
+
+function createBacklogSection({ title, tasks, icon, iconSvg }) {
+  const section = document.createElement("div");
+  section.className = "backlog-section";
+
+  const header = document.createElement("div");
+  header.className = "backlog-section-header";
+  header.innerHTML = `
+    <div class="backlog-section-icon ${icon}">${iconSvg}</div>
+    <span class="backlog-section-title">${title}</span>
+    <span class="backlog-section-count">${tasks.length}</span>
+  `;
+
+  const list = document.createElement("div");
+  list.className = "backlog-list";
+
+  tasks.forEach((task) => {
+    list.appendChild(createBacklogItem(task));
+  });
+
+  section.appendChild(header);
+  section.appendChild(list);
+  return section;
+}
+
+function createBacklogItem(task) {
+  const item = document.createElement("div");
+  item.className = "backlog-item";
+  item.dataset.taskId = task.id;
+
+  // Build meta info
+  let metaHtml = "";
+  if (task.dueDate) {
+    metaHtml += `<span class="due-chip">${formatRelativeDue(task.dueDate)}</span>`;
+  }
+  if (task.effort) {
+    const effortLabels = { "15m": "15 min", "30m": "30 min", "1h": "1 hour", "2h": "2+ hours" };
+    metaHtml += `<span class="effort-chip">${effortLabels[task.effort] || task.effort}</span>`;
+  }
+
+  item.innerHTML = `
+    <div class="backlog-item-main">
+      <div class="backlog-item-checkbox" title="Mark as done">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <div class="backlog-item-content">
+        <span class="backlog-item-title">${escapeHtml(task.title)}</span>
+        ${metaHtml ? `<div class="backlog-item-meta">${metaHtml}</div>` : ""}
+      </div>
+    </div>
+    <div class="backlog-item-actions">
+      <button class="backlog-action-btn start-btn" title="Start working">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+      </button>
+      <button class="backlog-action-btn schedule-btn" title="Set due date">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect>
+          <line x1="16" x2="16" y1="2" y2="6"></line>
+          <line x1="8" x2="8" y1="2" y2="6"></line>
+          <line x1="3" x2="21" y1="10" y2="10"></line>
+        </svg>
+      </button>
+    </div>
+  `;
+
+  // Event: Complete task
+  const checkbox = item.querySelector(".backlog-item-checkbox");
+  checkbox.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const found = findTask(task.id);
+    if (found) {
+      found.task.status = "done";
+      saveState();
+      renderBacklog();
+      renderBoard();
+      updateStats();
+    }
+  });
+
+  // Event: Start task (move to doing)
+  const startBtn = item.querySelector(".start-btn");
+  startBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const found = findTask(task.id);
+    if (found) {
+      found.task.status = "doing";
+      saveState();
+      renderBacklog();
+      renderBoard();
+      updateStats();
+    }
+  });
+
+  // Event: Schedule task (set due to today)
+  const scheduleBtn = item.querySelector(".schedule-btn");
+  scheduleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const found = findTask(task.id);
+    if (found) {
+      const today = new Date();
+      found.task.dueDate = today.toISOString().split("T")[0];
+      saveState();
+      renderBacklog();
+      renderBoard();
+      if (activeView === "today") renderToday();
+    }
+  });
+
+  // Event: Click to go to board
+  item.addEventListener("click", () => {
+    setActiveView("board");
+    setTimeout(() => {
+      const cardEl = document.querySelector(`[data-card-id="${task.id}"]`);
+      if (cardEl) {
+        cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        cardEl.classList.add("highlight");
+        setTimeout(() => cardEl.classList.remove("highlight"), 1500);
+      }
+    }, 100);
+  });
+
+  return item;
+}
+
+// Backlog icon helpers
+function calendarIcon() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line></svg>`;
+}
+
+function calendarNextIcon() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line><path d="m9 16 3-3 3 3"></path></svg>`;
+}
+
+function calendarLaterIcon() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line><line x1="12" x2="12" y1="14" y2="18"></line><line x1="12" x2="12.01" y1="14" y2="14"></line></svg>`;
+}
+
+function inboxIcon() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>`;
+}
+
+function boltIcon() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`;
+}
+
+function clockIcon() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
+}
+
+function flameIcon() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>`;
+}
+
+function questionIcon() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" x2="12.01" y1="17" y2="17"></line></svg>`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 function setFocusColumn(index) {
   focusIndex = Math.max(0, Math.min(index, columns.length - 1));
   columns.forEach((column, columnIndex) => {
@@ -782,8 +1100,28 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") toggleFocusMode(false);
 });
 
+// Backlog view mode toggle
+viewModeBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const mode = btn.dataset.group;
+    if (mode === backlogGroupMode) return;
+    backlogGroupMode = mode;
+    viewModeBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.group === mode));
+    renderBacklog();
+  });
+});
+
+// Backlog search
+if (backlogSearchInput) {
+  backlogSearchInput.addEventListener("input", () => {
+    backlogSearchQuery = backlogSearchInput.value;
+    renderBacklog();
+  });
+}
+
 renderBoard();
 renderToday();
+renderBacklog();
 setActiveView(activeView);
 applyLayers();
 
@@ -797,5 +1135,8 @@ function setActiveView(view) {
   });
   if (activeView === "today") {
     renderToday();
+  }
+  if (activeView === "backlog") {
+    renderBacklog();
   }
 }
