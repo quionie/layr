@@ -43,10 +43,14 @@ function createCardElement(card) {
 
   el.addEventListener("dragstart", () => {
     el.classList.add("dragging");
+    el.style.transform = "scale(1.03)";
+    el.style.boxShadow = "0 18px 40px rgba(15, 23, 42, 0.18)";
   });
 
   el.addEventListener("dragend", () => {
     el.classList.remove("dragging");
+    el.style.transform = "";
+    el.style.boxShadow = "";
   });
 
   return el;
