@@ -12,8 +12,12 @@ const modal = document.getElementById("card-modal");
 const form = document.getElementById("card-form");
 const titleInput = document.getElementById("card-title");
 const cancelButton = document.getElementById("cancel");
+const focusToggle = document.getElementById("focus-toggle");
+const columns = Array.from(document.querySelectorAll(".column"));
 
 let boardState = loadState();
+let focusMode = false;
+let focusIndex = 0;
 
 function loadState() {
   try {
@@ -227,6 +231,25 @@ function renderBoard() {
   renderColumn("done");
 }
 
+function setFocusColumn(index) {
+  focusIndex = Math.max(0, Math.min(index, columns.length - 1));
+  columns.forEach((column, columnIndex) => {
+    column.classList.toggle("is-focus", columnIndex === focusIndex);
+  });
+}
+
+function toggleFocusMode(force) {
+  focusMode = typeof force === "boolean" ? force : !focusMode;
+  document.body.classList.toggle("focus-mode", focusMode);
+  focusToggle.setAttribute("aria-pressed", String(focusMode));
+  focusToggle.textContent = focusMode ? "Exit focus" : "Focus mode";
+  if (focusMode) {
+    setFocusColumn(focusIndex);
+  } else {
+    columns.forEach((column) => column.classList.remove("is-focus"));
+  }
+}
+
 function openModal() {
   modal.classList.add("show");
   modal.setAttribute("aria-hidden", "false");
@@ -266,6 +289,7 @@ function moveCard(cardId, targetColumn) {
 }
 
 addButton.addEventListener("click", openModal);
+focusToggle.addEventListener("click", () => toggleFocusMode());
 
 cancelButton.addEventListener("click", closeModal);
 
@@ -298,6 +322,14 @@ board.addEventListener("drop", (event) => {
   const dragging = document.querySelector(".card.dragging");
   if (!column || !dragging) return;
   moveCard(dragging.dataset.id, column.dataset.column);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (!focusMode) return;
+  if (event.target.matches("input, textarea")) return;
+  if (event.key === "1") setFocusColumn(0);
+  if (event.key === "2") setFocusColumn(1);
+  if (event.key === "3") setFocusColumn(2);
 });
 
 renderBoard();
