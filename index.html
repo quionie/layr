@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Layr</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>Layr</h1>
+      <p>Simple kanban board</p>
+    </header>
+
+    <main class="board" aria-label="Kanban board">
+      <section class="column" data-column="todo">
+        <div class="column-header">
+          <h2>To Do</h2>
+          <button id="add-card" class="btn" type="button">+ Add</button>
+        </div>
+        <div class="cards" data-cards="todo" aria-label="To Do cards"></div>
+      </section>
+
+      <section class="column" data-column="doing">
+        <div class="column-header">
+          <h2>Doing</h2>
+        </div>
+        <div class="cards" data-cards="doing" aria-label="Doing cards"></div>
+      </section>
+
+      <section class="column" data-column="done">
+        <div class="column-header">
+          <h2>Done</h2>
+        </div>
+        <div class="cards" data-cards="done" aria-label="Done cards"></div>
+      </section>
+    </main>
+
+    <div class="modal" id="card-modal" aria-hidden="true">
+      <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <h3 id="modal-title">New card</h3>
+        <form id="card-form">
+          <label for="card-title">Title</label>
+          <input id="card-title" name="title" type="text" maxlength="80" required />
+          <div class="modal-actions">
+            <button type="button" class="btn ghost" id="cancel">Cancel</button>
+            <button type="submit" class="btn primary">Add</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
