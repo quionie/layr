@@ -164,13 +164,21 @@ function createCardElement(card) {
   editButton.innerHTML =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.75V20h3.25l9.58-9.58-3.25-3.25L4 16.75zm15.71-9.04a1.003 1.003 0 0 0 0-1.42l-2-2a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.25 3.25 1.99-1.66z"/></svg>';
 
+  const completeButton = document.createElement("button");
+  completeButton.type = "button";
+  completeButton.className = "icon-button complete-btn";
+  completeButton.setAttribute("aria-label", "Mark complete");
+  completeButton.innerHTML =
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>';
+
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
-  deleteButton.className = "icon-button";
+  deleteButton.className = "icon-button delete-btn";
   deleteButton.setAttribute("aria-label", "Delete card");
   deleteButton.innerHTML =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 7h2v8h-2v-8zm4 0h2v8h-2v-8z"/></svg>';
 
+  actions.appendChild(completeButton);
   actions.appendChild(editButton);
   actions.appendChild(deleteButton);
 
@@ -222,6 +230,8 @@ function createCardElement(card) {
 
   el.classList.toggle("expanded", Boolean(card.expanded));
   el.classList.toggle("has-desc", Boolean(card.description && card.description.trim()));
+  el.classList.toggle("is-overdue", card.status !== "done" && isOverdue(card.dueDate));
+  el.classList.toggle("is-done", card.status === "done");
 
   function startTitleEdit() {
     el.classList.add("editing-title");
@@ -260,8 +270,18 @@ function createCardElement(card) {
     }
   });
 
+  completeButton.addEventListener("click", () => {
+    if (card.status === "done") {
+      moveCard(card.id, "todo");
+    } else {
+      moveCard(card.id, "done");
+    }
+  });
+
   deleteButton.addEventListener("click", () => {
-    deleteCard(card.id);
+    if (confirm("Delete this task?")) {
+      deleteCard(card.id);
+    }
   });
 
   toggleButton.addEventListener("click", () => {
@@ -311,18 +331,33 @@ function createCardElement(card) {
 function renderColumn(columnKey) {
   const column = document.querySelector(`[data-cards="${columnKey}"]`);
   const countEl = document.querySelector(`[data-count="${columnKey}"]`);
+  const emptyEl = document.querySelector(`[data-empty="${columnKey}"]`);
   column.innerHTML = "";
   const tasks = boardState.tasks.filter((task) => task.status === columnKey);
   tasks.forEach((task) => {
     column.appendChild(createCardElement(task));
   });
   if (countEl) countEl.textContent = tasks.length;
+  if (emptyEl) emptyEl.classList.toggle("show", tasks.length === 0);
+}
+
+function updateStats() {
+  const total = boardState.tasks.length;
+  const doing = boardState.tasks.filter((t) => t.status === "doing").length;
+  const done = boardState.tasks.filter((t) => t.status === "done").length;
+  const totalEl = document.getElementById("stat-total");
+  const doingEl = document.getElementById("stat-doing");
+  const doneEl = document.getElementById("stat-done");
+  if (totalEl) totalEl.textContent = total;
+  if (doingEl) doingEl.textContent = doing;
+  if (doneEl) doneEl.textContent = done;
 }
 
 function renderBoard() {
   renderColumn("todo");
   renderColumn("doing");
   renderColumn("done");
+  updateStats();
 }
 
 function isDueToday(dueDate) {
@@ -335,6 +370,16 @@ function isDueToday(dueDate) {
     due.getMonth() === now.getMonth() &&
     due.getDate() === now.getDate()
   );
+}
+
+function isOverdue(dueDate) {
+  if (!dueDate) return false;
+  const due = new Date(dueDate);
+  if (Number.isNaN(due.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  return dueDay < today;
 }
 
 function renderToday() {
@@ -422,6 +467,7 @@ function addCard(title) {
   boardState.tasks.push(card);
   saveState();
   renderColumn("todo");
+  updateStats();
 }
 
 function moveCard(cardId, targetColumn) {

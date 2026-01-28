@@ -38,9 +38,12 @@
       <div class="main-content">
         <header class="app-header">
           <div class="header-content">
-            <div>
-              <h1>Layr</h1>
-              <p>Simple kanban board</p>
+            <div class="board-stats">
+              <span class="stat" data-stat="total"><strong id="stat-total">0</strong> tasks</span>
+              <span class="stat-divider"></span>
+              <span class="stat" data-stat="doing"><strong id="stat-doing">0</strong> in progress</span>
+              <span class="stat-divider"></span>
+              <span class="stat stat-success" data-stat="done"><strong id="stat-done">0</strong> completed</span>
             </div>
           </div>
         </header>
@@ -53,6 +56,10 @@
               <button id="add-card" class="btn" type="button">+ Add</button>
             </div>
             <div class="cards" data-cards="todo" aria-label="To Do cards"></div>
+            <div class="empty-state" data-empty="todo">
+              <p>No tasks yet</p>
+              <span>Click + Add to create your first task</span>
+            </div>
           </section>
 
           <section class="column" data-column="doing">
@@ -61,6 +68,10 @@
               <span class="column-count" data-count="doing">0</span>
             </div>
             <div class="cards" data-cards="doing" aria-label="Doing cards"></div>
+            <div class="empty-state" data-empty="doing">
+              <p>Nothing in progress</p>
+              <span>Drag tasks here when you start working</span>
+            </div>
           </section>
 
           <section class="column" data-column="done">
@@ -69,6 +80,10 @@
               <span class="column-count" data-count="done">0</span>
             </div>
             <div class="cards" data-cards="done" aria-label="Done cards"></div>
+            <div class="empty-state" data-empty="done">
+              <p>No completed tasks</p>
+              <span>Finished tasks will appear here</span>
+            </div>
           </section>
         </main>
 

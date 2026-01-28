@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  --bg: #eef1f5;
+  --bg: #dfe4ec;
   --surface: #ffffff;
   --panel: #f7f8fa;
   --text: #0f172a;
@@ -46,7 +46,7 @@ body {
 }
 
 .sidebar {
-  background: linear-gradient(180deg, #0f172a 0%, #0b1220 100%);
+  background: linear-gradient(180deg, #0b1021 0%, #12163a 55%, #1e1a4a 100%);
   border-right: 1px solid var(--sidebar-border);
   padding: 28px 22px;
   display: flex;
@@ -164,18 +164,32 @@ body {
   text-align: center;
 }
 
-.app-header h1 {
-  margin: 0;
-  font-size: 28px;
-  letter-spacing: -0.03em;
+.board-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.stat {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.stat strong {
+  color: var(--text);
   font-weight: 600;
 }
 
-.app-header p {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  letter-spacing: 0.01em;
+.stat-success strong {
+  color: #059669;
+}
+
+.stat-divider {
+  width: 4px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 50%;
 }
 
 .board {
@@ -294,6 +308,41 @@ body {
   margin-left: auto;
 }
 
+.column[data-column="done"] {
+  background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%);
+  border-color: rgba(5, 150, 105, 0.1);
+}
+
+.column[data-column="done"] .column-count {
+  background: rgba(5, 150, 105, 0.12);
+  color: #059669;
+}
+
+.empty-state {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--muted);
+}
+
+.empty-state.show {
+  display: flex;
+}
+
+.empty-state p {
+  margin: 0 0 4px;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.empty-state span {
+  font-size: 12px;
+}
+
 .cards {
   display: flex;
   flex-direction: column;
@@ -316,6 +365,25 @@ body {
 .card:hover {
   box-shadow: 0 12px 28px rgba(16, 24, 40, 0.12);
   transform: translateY(-1px);
+}
+
+.card.is-overdue {
+  border-color: rgba(220, 38, 38, 0.3);
+  background: linear-gradient(180deg, #fef2f2 0%, #ffffff 40%);
+}
+
+.card.is-overdue .card-due-label {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.card.is-done {
+  opacity: 0.75;
+}
+
+.card.is-done .card-title {
+  text-decoration: line-through;
+  color: var(--muted);
 }
 
 body.focus-mode .board {
@@ -451,6 +519,16 @@ body.focus-mode .column.is-focus {
 .icon-button:hover {
   color: #4b5563;
   background: rgba(15, 23, 42, 0.06);
+}
+
+.icon-button.complete-btn:hover {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.1);
+}
+
+.icon-button.delete-btn:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
 }
 
 .card-body {
