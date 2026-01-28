@@ -1,9 +1,7 @@
 const stateKey = "layr-board-v1";
 
 const defaultState = {
-  todo: [],
-  doing: [],
-  done: [],
+  tasks: [],
 };
 
 const board = document.querySelector(".board");
@@ -11,24 +9,43 @@ const addButton = document.getElementById("add-card");
 const modal = document.getElementById("card-modal");
 const form = document.getElementById("card-form");
 const titleInput = document.getElementById("card-title");
+const dueDateInput = document.getElementById("card-due");
 const cancelButton = document.getElementById("cancel");
 const focusToggle = document.getElementById("focus-toggle");
 const columns = Array.from(document.querySelectorAll(".column"));
+const navLinks = Array.from(document.querySelectorAll(".nav-link"));
+const viewPanels = Array.from(document.querySelectorAll("[data-view-panel]"));
+const todayList = document.getElementById("today-list");
 
 let boardState = loadState();
 let focusMode = false;
 let focusIndex = 0;
+let activeView = "board";
 
 function loadState() {
   try {
     const raw = localStorage.getItem(stateKey);
     if (!raw) return structuredClone(defaultState);
     const parsed = JSON.parse(raw);
-    return {
-      todo: Array.isArray(parsed.todo) ? parsed.todo : [],
-      doing: Array.isArray(parsed.doing) ? parsed.doing : [],
-      done: Array.isArray(parsed.done) ? parsed.done : [],
-    };
+    if (Array.isArray(parsed.tasks)) {
+      return { tasks: parsed.tasks };
+    }
+    const tasks = [];
+    ["todo", "doing", "done"].forEach((status) => {
+      const column = Array.isArray(parsed[status]) ? parsed[status] : [];
+      column.forEach((card) => {
+        tasks.push({
+          id: card.id,
+          title: card.title,
+          status,
+          dueDate: card.dueDate || null,
+          createdAt: card.createdAt || new Date().toISOString(),
+          description: card.description || "",
+          expanded: Boolean(card.expanded),
+        });
+      });
+    });
+    return { tasks };
   } catch {
     return structuredClone(defaultState);
   }
@@ -38,29 +55,49 @@ function saveState() {
   localStorage.setItem(stateKey, JSON.stringify(boardState));
 }
 
-function findCardLocation(cardId) {
-  const columnKeys = Object.keys(boardState);
-  for (const columnKey of columnKeys) {
-    const index = boardState[columnKey].findIndex((c) => c.id === cardId);
-    if (index !== -1) {
-      return { columnKey, index, card: boardState[columnKey][index] };
-    }
-  }
-  return null;
+function formatRelativeDue(dueDate) {
+  if (!dueDate) return "";
+  const due = new Date(dueDate);
+  if (Number.isNaN(due.getTime())) return "";
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const target = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  const diffDays = Math.round((target - start) / 86400000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+  if (diffDays > 1) return `In ${diffDays} days`;
+  if (diffDays === -1) return "Yesterday";
+  return `${Math.abs(diffDays)} days ago`;
+}
+
+function toDateInputValue(dateValue) {
+  if (!dateValue) return "";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function findTask(cardId) {
+  const index = boardState.tasks.findIndex((task) => task.id === cardId);
+  if (index === -1) return null;
+  return { index, task: boardState.tasks[index] };
 }
 
 function updateCardState(cardId, updates) {
-  const location = findCardLocation(cardId);
-  if (!location) return null;
-  Object.assign(location.card, updates);
+  const found = findTask(cardId);
+  if (!found) return null;
+  Object.assign(found.task, updates);
   saveState();
-  return location.card;
+  return found.task;
 }
 
 function deleteCard(cardId) {
-  const location = findCardLocation(cardId);
-  if (!location) return;
-  boardState[location.columnKey].splice(location.index, 1);
+  const found = findTask(cardId);
+  if (!found) return;
+  boardState.tasks.splice(found.index, 1);
   saveState();
   renderBoard();
 }
@@ -113,6 +150,21 @@ function createCardElement(card) {
   const body = document.createElement("div");
   body.className = "card-body";
 
+  const dueRow = document.createElement("div");
+  dueRow.className = "card-due";
+
+  const dueLabel = document.createElement("span");
+  dueLabel.className = "card-due-label";
+  dueLabel.textContent = formatRelativeDue(card.dueDate);
+
+  const dueInput = document.createElement("input");
+  dueInput.className = "card-due-input";
+  dueInput.type = "date";
+  dueInput.value = toDateInputValue(card.dueDate);
+
+  dueRow.appendChild(dueLabel);
+  dueRow.appendChild(dueInput);
+
   const descText = document.createElement("p");
   descText.className = "card-desc-text";
   descText.textContent = card.description || "";
@@ -128,6 +180,7 @@ function createCardElement(card) {
   toggleButton.className = "card-toggle";
   toggleButton.textContent = card.expanded ? "Collapse" : "Details";
 
+  body.appendChild(dueRow);
   body.appendChild(descText);
   body.appendChild(descInput);
   body.appendChild(toggleButton);
@@ -193,6 +246,12 @@ function createCardElement(card) {
     updateCardState(card.id, { description: nextDesc });
   });
 
+  dueInput.addEventListener("change", () => {
+    const nextDue = dueInput.value ? dueInput.value : null;
+    dueLabel.textContent = formatRelativeDue(nextDue);
+    updateCardState(card.id, { dueDate: nextDue });
+  });
+
   el.addEventListener("dragstart", (event) => {
     if (
       event.target.closest(".card-actions") ||
@@ -220,15 +279,67 @@ function createCardElement(card) {
 function renderColumn(columnKey) {
   const column = document.querySelector(`[data-cards="${columnKey}"]`);
   column.innerHTML = "";
-  boardState[columnKey].forEach((card) => {
-    column.appendChild(createCardElement(card));
-  });
+  boardState.tasks
+    .filter((task) => task.status === columnKey)
+    .forEach((task) => {
+      column.appendChild(createCardElement(task));
+    });
 }
 
 function renderBoard() {
   renderColumn("todo");
   renderColumn("doing");
   renderColumn("done");
+}
+
+function isDueToday(dueDate) {
+  if (!dueDate) return false;
+  const due = new Date(dueDate);
+  if (Number.isNaN(due.getTime())) return false;
+  const now = new Date();
+  return (
+    due.getFullYear() === now.getFullYear() &&
+    due.getMonth() === now.getMonth() &&
+    due.getDate() === now.getDate()
+  );
+}
+
+function renderToday() {
+  if (!todayList) return;
+  todayList.innerHTML = "";
+  const tasks = boardState.tasks
+    .filter((task) => task.status !== "done")
+    .filter((task) => isDueToday(task.dueDate) || task.status === "doing");
+
+  const sorted = tasks.sort((a, b) => {
+    const aDue = isDueToday(a.dueDate);
+    const bDue = isDueToday(b.dueDate);
+    if (aDue !== bDue) return aDue ? -1 : 1;
+    if (a.dueDate && b.dueDate) {
+      return new Date(a.dueDate) - new Date(b.dueDate);
+    }
+    if (a.status !== b.status) {
+      return a.status === "doing" ? -1 : 1;
+    }
+    return new Date(a.createdAt) - new Date(b.createdAt);
+  });
+
+  sorted.forEach((task) => {
+    const item = document.createElement("div");
+    item.className = "today-item";
+
+    const title = document.createElement("div");
+    title.className = "today-item-title";
+    title.textContent = task.title;
+
+    const meta = document.createElement("div");
+    meta.className = "today-item-meta";
+    meta.textContent = task.status === "doing" ? "Doing" : "Due today";
+
+    item.appendChild(title);
+    item.appendChild(meta);
+    todayList.appendChild(item);
+  });
 }
 
 function setFocusColumn(index) {
@@ -254,6 +365,7 @@ function openModal() {
   modal.classList.add("show");
   modal.setAttribute("aria-hidden", "false");
   titleInput.value = "";
+  dueDateInput.value = "";
   titleInput.focus();
 }
 
@@ -266,30 +378,36 @@ function addCard(title) {
   const card = {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     title,
+    status: "todo",
+    dueDate: dueDateInput.value ? dueDateInput.value : null,
+    createdAt: new Date().toISOString(),
     description: "",
     expanded: false,
   };
-  boardState.todo.push(card);
+  boardState.tasks.push(card);
   saveState();
   renderColumn("todo");
 }
 
 function moveCard(cardId, targetColumn) {
-  let movedCard = null;
-  Object.keys(boardState).forEach((columnKey) => {
-    const index = boardState[columnKey].findIndex((c) => c.id === cardId);
-    if (index !== -1) {
-      movedCard = boardState[columnKey].splice(index, 1)[0];
-    }
-  });
-  if (!movedCard) return;
-  boardState[targetColumn].push(movedCard);
+  const found = findTask(cardId);
+  if (!found) return;
+  found.task.status = targetColumn;
   saveState();
   renderBoard();
 }
 
 addButton.addEventListener("click", openModal);
 focusToggle.addEventListener("click", () => toggleFocusMode());
+
+navLinks.forEach((link) => {
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    const nextView = link.dataset.view;
+    if (!nextView) return;
+    setActiveView(nextView);
+  });
+});
 
 cancelButton.addEventListener("click", closeModal);
 
@@ -333,3 +451,18 @@ document.addEventListener("keydown", (event) => {
 });
 
 renderBoard();
+renderToday();
+setActiveView(activeView);
+
+function setActiveView(view) {
+  activeView = view;
+  navLinks.forEach((link) => {
+    link.classList.toggle("active", link.dataset.view === activeView);
+  });
+  viewPanels.forEach((panel) => {
+    panel.classList.toggle("is-active", panel.dataset.viewPanel === activeView);
+  });
+  if (activeView === "today") {
+    renderToday();
+  }
+}

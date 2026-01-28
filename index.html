@@ -7,41 +7,77 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header class="app-header">
-      <div class="header-content">
-        <div>
-          <h1>Layr</h1>
-          <p>Simple kanban board</p>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <div class="sidebar-brand">Layr</div>
+          <div class="sidebar-subtitle">Kanban board</div>
         </div>
-        <button id="focus-toggle" class="btn ghost" type="button" aria-pressed="false">
+
+        <nav class="sidebar-nav" aria-label="Primary">
+          <a class="nav-link active" href="#" data-view="board">Board</a>
+          <a class="nav-link" href="#" data-view="today">Today</a>
+          <a class="nav-link" href="#" data-view="timeline">Timeline</a>
+          <a class="nav-link" href="#" data-view="backlog">Backlog</a>
+          <a class="nav-link" href="#" data-view="archive">Archive</a>
+        </nav>
+
+        <button id="focus-toggle" class="btn focus-toggle" type="button" aria-pressed="false">
           Focus mode
         </button>
+
+        <div class="sidebar-footer">
+          <div class="user-chip">
+            <span class="avatar" aria-hidden="true"></span>
+            <span>Guest</span>
+          </div>
+          <button class="btn ghost" type="button">Settings</button>
+        </div>
+      </aside>
+
+      <div class="main-content">
+        <header class="app-header">
+          <div class="header-content">
+            <div>
+              <h1>Layr</h1>
+              <p>Simple kanban board</p>
+            </div>
+          </div>
+        </header>
+
+        <main class="board view" data-view-panel="board" aria-label="Kanban board">
+          <section class="column" data-column="todo">
+            <div class="column-header">
+              <h2>To Do</h2>
+              <button id="add-card" class="btn" type="button">+ Add</button>
+            </div>
+            <div class="cards" data-cards="todo" aria-label="To Do cards"></div>
+          </section>
+
+          <section class="column" data-column="doing">
+            <div class="column-header">
+              <h2>Doing</h2>
+            </div>
+            <div class="cards" data-cards="doing" aria-label="Doing cards"></div>
+          </section>
+
+          <section class="column" data-column="done">
+            <div class="column-header">
+              <h2>Done</h2>
+            </div>
+            <div class="cards" data-cards="done" aria-label="Done cards"></div>
+          </section>
+        </main>
+
+        <section class="today-view view" data-view-panel="today" aria-label="Today list">
+          <div class="today-header">
+            <h2>Today</h2>
+            <p>Due today and in progress</p>
+          </div>
+          <div class="today-list" id="today-list"></div>
+        </section>
       </div>
-    </header>
-
-    <main class="board" aria-label="Kanban board">
-      <section class="column" data-column="todo">
-        <div class="column-header">
-          <h2>To Do</h2>
-          <button id="add-card" class="btn" type="button">+ Add</button>
-        </div>
-        <div class="cards" data-cards="todo" aria-label="To Do cards"></div>
-      </section>
-
-      <section class="column" data-column="doing">
-        <div class="column-header">
-          <h2>Doing</h2>
-        </div>
-        <div class="cards" data-cards="doing" aria-label="Doing cards"></div>
-      </section>
-
-      <section class="column" data-column="done">
-        <div class="column-header">
-          <h2>Done</h2>
-        </div>
-        <div class="cards" data-cards="done" aria-label="Done cards"></div>
-      </section>
-    </main>
+    </div>
 
     <div class="modal" id="card-modal" aria-hidden="true">
       <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -49,6 +85,8 @@
         <form id="card-form">
           <label for="card-title">Title</label>
           <input id="card-title" name="title" type="text" maxlength="80" required />
+          <label for="card-due">Due date</label>
+          <input id="card-due" name="dueDate" type="date" />
           <div class="modal-actions">
             <button type="button" class="btn ghost" id="cancel">Cancel</button>
             <button type="submit" class="btn primary">Add</button>
