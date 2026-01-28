@@ -284,6 +284,16 @@ body {
   font-weight: 600;
 }
 
+.column-count {
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
 .cards {
   display: flex;
   flex-direction: column;
@@ -335,6 +345,48 @@ body.focus-mode .column.is-focus {
 .card.dragging {
   opacity: 0.65;
   box-shadow: none;
+}
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.priority-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.priority-low {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.priority-medium {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.priority-high {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.priority-critical {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.card-timestamp {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .card-header {
@@ -533,13 +585,15 @@ body.focus-mode .column.is-focus {
   margin-bottom: 6px;
 }
 
-.modal-content input {
+.modal-content input,
+.modal-content select {
   width: 100%;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(15, 23, 42, 0.12);
   font-size: 14px;
   margin-bottom: 16px;
+  background: #ffffff;
 }
 
 .modal-actions {

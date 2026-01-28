@@ -10,6 +10,7 @@ const modal = document.getElementById("card-modal");
 const form = document.getElementById("card-form");
 const titleInput = document.getElementById("card-title");
 const dueDateInput = document.getElementById("card-due");
+const priorityInput = document.getElementById("card-priority");
 const cancelButton = document.getElementById("cancel");
 const focusToggle = document.getElementById("focus-toggle");
 const columns = Array.from(document.querySelectorAll(".column"));
@@ -70,6 +71,22 @@ function formatRelativeDue(dueDate) {
   return `${Math.abs(diffDays)} days ago`;
 }
 
+function formatRelativeTime(dateString) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
 function toDateInputValue(dateValue) {
   if (!dateValue) return "";
   const date = new Date(dateValue);
@@ -107,6 +124,20 @@ function createCardElement(card) {
   el.className = "card";
   el.draggable = true;
   el.dataset.id = card.id;
+
+  const meta = document.createElement("div");
+  meta.className = "card-meta";
+
+  const priorityBadge = document.createElement("span");
+  priorityBadge.className = `priority-badge priority-${card.priority || "medium"}`;
+  priorityBadge.textContent = (card.priority || "medium").charAt(0).toUpperCase() + (card.priority || "medium").slice(1);
+
+  const timestamp = document.createElement("span");
+  timestamp.className = "card-timestamp";
+  timestamp.textContent = formatRelativeTime(card.createdAt);
+
+  meta.appendChild(priorityBadge);
+  meta.appendChild(timestamp);
 
   const header = document.createElement("div");
   header.className = "card-header";
@@ -185,6 +216,7 @@ function createCardElement(card) {
   body.appendChild(descInput);
   body.appendChild(toggleButton);
 
+  el.appendChild(meta);
   el.appendChild(header);
   el.appendChild(body);
 
@@ -278,12 +310,13 @@ function createCardElement(card) {
 
 function renderColumn(columnKey) {
   const column = document.querySelector(`[data-cards="${columnKey}"]`);
+  const countEl = document.querySelector(`[data-count="${columnKey}"]`);
   column.innerHTML = "";
-  boardState.tasks
-    .filter((task) => task.status === columnKey)
-    .forEach((task) => {
-      column.appendChild(createCardElement(task));
-    });
+  const tasks = boardState.tasks.filter((task) => task.status === columnKey);
+  tasks.forEach((task) => {
+    column.appendChild(createCardElement(task));
+  });
+  if (countEl) countEl.textContent = tasks.length;
 }
 
 function renderBoard() {
@@ -366,6 +399,7 @@ function openModal() {
   modal.setAttribute("aria-hidden", "false");
   titleInput.value = "";
   dueDateInput.value = "";
+  priorityInput.value = "medium";
   titleInput.focus();
 }
 
@@ -379,6 +413,7 @@ function addCard(title) {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     title,
     status: "todo",
+    priority: priorityInput.value || "medium",
     dueDate: dueDateInput.value ? dueDateInput.value : null,
     createdAt: new Date().toISOString(),
     description: "",

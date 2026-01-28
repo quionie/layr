@@ -49,6 +49,7 @@
           <section class="column" data-column="todo">
             <div class="column-header">
               <h2>To Do</h2>
+              <span class="column-count" data-count="todo">0</span>
               <button id="add-card" class="btn" type="button">+ Add</button>
             </div>
             <div class="cards" data-cards="todo" aria-label="To Do cards"></div>
@@ -57,6 +58,7 @@
           <section class="column" data-column="doing">
             <div class="column-header">
               <h2>Doing</h2>
+              <span class="column-count" data-count="doing">0</span>
             </div>
             <div class="cards" data-cards="doing" aria-label="Doing cards"></div>
           </section>
@@ -64,6 +66,7 @@
           <section class="column" data-column="done">
             <div class="column-header">
               <h2>Done</h2>
+              <span class="column-count" data-count="done">0</span>
             </div>
             <div class="cards" data-cards="done" aria-label="Done cards"></div>
           </section>
@@ -87,6 +90,13 @@
           <input id="card-title" name="title" type="text" maxlength="80" required />
           <label for="card-due">Due date</label>
           <input id="card-due" name="dueDate" type="date" />
+          <label for="card-priority">Priority</label>
+          <select id="card-priority" name="priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
           <div class="modal-actions">
             <button type="button" class="btn ghost" id="cancel">Cancel</button>
             <button type="submit" class="btn primary">Add</button>
