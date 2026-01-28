@@ -385,6 +385,21 @@ function createCardElement(card) {
     updateCardState(card.id, { description: nextDesc });
   });
 
+  // Helper to collapse card
+  function collapseCard() {
+    el.classList.remove("expanded");
+    toggleButton.textContent = "Edit";
+    updateCardState(card.id, { expanded: false });
+  }
+
+  // Enter key collapses card (Shift+Enter for new line in textarea)
+  descInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      collapseCard();
+    }
+  });
+
   // Date auto-save
   dateInput.addEventListener("change", () => {
     const nextDate = dateInput.value || null;
@@ -394,6 +409,14 @@ function createCardElement(card) {
     updateMetaDisplay();
   });
 
+  // Enter on date collapses card
+  dateInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      collapseCard();
+    }
+  });
+
   // Effort auto-save
   effortSelect.addEventListener("change", () => {
     const nextEffort = effortSelect.value || null;
@@ -401,6 +424,14 @@ function createCardElement(card) {
     el.classList.toggle("has-effort", Boolean(nextEffort));
     updateCardState(card.id, { effort: nextEffort });
     updateMetaDisplay();
+  });
+
+  // Enter on effort collapses card
+  effortSelect.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      collapseCard();
+    }
   });
 
   // Drag & Drop

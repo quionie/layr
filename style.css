@@ -815,29 +815,34 @@ body.layer-time .card .layer-time-info.is-overdue ~ .card-title {
 }
 
 .card-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 
 .card-input {
   width: 100%;
-  padding: 8px 10px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
+  border: 1px solid transparent;
   font-size: 13px;
   font-family: inherit;
-  background: var(--bg-surface);
+  background: var(--bg-muted);
   color: var(--text-primary);
   outline: none;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+}
+
+.card-input:hover {
+  background: var(--bg-subtle);
 }
 
 .card-input:focus {
+  background: var(--bg-surface);
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-muted);
+  box-shadow: 0 0 0 3px var(--accent-muted), var(--glow-accent);
 }
 
 .card-input::placeholder {
@@ -846,34 +851,65 @@ body.layer-time .card .layer-time-info.is-overdue ~ .card-title {
 
 .card-desc-input {
   resize: vertical;
-  min-height: 60px;
-  line-height: 1.5;
+  min-height: 72px;
+  line-height: 1.6;
+  padding: 12px;
 }
 
 .card-fields-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .card-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .card-date-input,
 .card-effort-select {
-  padding: 8px 10px;
+  padding: 10px 12px;
+  height: 40px;
 }
 
+/* Date input styling */
+.card-date-input {
+  cursor: pointer;
+  color-scheme: dark;
+}
+
+.card-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.card-date-input:hover::-webkit-calendar-picker-indicator,
+.card-date-input:focus::-webkit-calendar-picker-indicator {
+  opacity: 1;
+}
+
+/* Effort select styling */
 .card-effort-select {
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
-  padding-right: 28px;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.card-effort-select:hover {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23fafafa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+.card-effort-select option {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 8px;
 }
 
 /* Card Toggle Button */
