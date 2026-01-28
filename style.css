@@ -43,6 +43,7 @@ body {
   grid-template-columns: 240px 1fr;
   overflow: hidden;
   min-height: calc(100vh - 48px);
+  transition: grid-template-columns 0.3s ease;
 }
 
 .sidebar {
@@ -52,6 +53,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 22px;
+  transition: opacity 0.3s ease;
 }
 
 .sidebar-top {
@@ -101,14 +103,28 @@ body {
 }
 
 .focus-toggle {
-  background: #1d4ed8;
-  color: #ffffff;
-  border-color: transparent;
+  background: rgba(8, 11, 22, 0.9);
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 12px;
   padding: 10px 14px;
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 8px 20px rgba(17, 24, 39, 0.55),
+    0 0 12px rgba(99, 102, 241, 0.25);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.focus-toggle.is-active {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(148, 163, 184, 0.5);
+  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.25),
+    0 10px 28px rgba(15, 23, 42, 0.65),
+    0 0 16px rgba(99, 102, 241, 0.35);
 }
 
 .sidebar-footer {
@@ -155,41 +171,57 @@ body {
   margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: center;
+  gap: 24px;
 }
 
-.header-content > div {
-  flex: 1;
-  text-align: center;
+.layer-toggles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.layer-toggle {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.layer-toggle:hover:not(:disabled) {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.layer-toggle.is-active {
+  background: var(--text);
+  border-color: var(--text);
+  color: #ffffff;
+}
+
+.layer-toggle:disabled {
+  cursor: default;
 }
 
 .board-stats {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
+  gap: 8px;
 }
 
 .stat {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
 }
 
 .stat strong {
   color: var(--text);
   font-weight: 600;
-}
-
-.stat-success strong {
-  color: #059669;
-}
-
-.stat-divider {
-  width: 4px;
-  height: 4px;
-  background: var(--border);
-  border-radius: 50%;
 }
 
 .board {
@@ -367,14 +399,9 @@ body {
   transform: translateY(-1px);
 }
 
-.card.is-overdue {
-  border-color: rgba(220, 38, 38, 0.3);
-  background: linear-gradient(180deg, #fef2f2 0%, #ffffff 40%);
-}
-
-.card.is-overdue .card-due-label {
+/* Overdue card highlight when time layer active */
+body.layer-time .card .layer-time-info.is-overdue ~ .card-title {
   color: #dc2626;
-  font-weight: 600;
 }
 
 .card.is-done {
@@ -392,18 +419,41 @@ body.focus-mode .board {
 }
 
 body.focus-mode .column {
-  opacity: 0;
+  opacity: 0.2;
   transform: scale(0.98);
   pointer-events: none;
-  position: absolute;
-  width: 100%;
+  filter: saturate(0.6) blur(0.5px);
 }
 
 body.focus-mode .column.is-focus {
   opacity: 1;
   transform: scale(1);
   pointer-events: auto;
-  position: static;
+  filter: none;
+}
+
+body.focus-mode .column:not([data-column="doing"]) .cards {
+  visibility: hidden;
+}
+
+body.focus-mode .app-shell {
+  grid-template-columns: 88px 1fr;
+}
+
+body.focus-mode .sidebar-top,
+body.focus-mode .sidebar-nav,
+body.focus-mode .sidebar-footer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.focus-mode .sidebar {
+  opacity: 0.6;
+}
+
+body.focus-mode .sidebar .focus-toggle {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .card:active {
@@ -415,46 +465,56 @@ body.focus-mode .column.is-focus {
   box-shadow: none;
 }
 
-.card-meta {
-  display: flex;
+/* Layer info row - hidden by default */
+.card-layers {
+  display: none;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-top: 8px;
 }
 
-.priority-badge {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 3px 8px;
-  border-radius: 6px;
+.layer-time-info {
+  font-size: 12px;
+  color: var(--muted);
+  display: none;
 }
 
-.priority-low {
-  background: #ecfdf5;
-  color: #059669;
-}
-
-.priority-medium {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.priority-high {
-  background: #fee2e2;
+.layer-time-info.is-overdue {
   color: #dc2626;
+  font-weight: 600;
 }
 
-.priority-critical {
-  background: #dc2626;
-  color: #ffffff;
-}
-
-.card-timestamp {
+.layer-effort-info {
   font-size: 11px;
   color: var(--muted);
+  padding: 2px 8px;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 6px;
+  display: none;
+}
+
+.layer-effort-info.has-effort {
+  background: rgba(99, 102, 241, 0.1);
+  color: #4f46e5;
+}
+
+/* Show layers based on body class */
+body.layer-time .card-layers,
+body.layer-effort .card-layers {
+  display: flex;
+}
+
+body.layer-time .layer-time-info {
+  display: block;
+}
+
+body.layer-effort .layer-effort-info {
+  display: block;
+}
+
+/* Overdue card styling when time layer is on */
+body.layer-time .card.has-due .layer-time-info.is-overdue {
+  color: #dc2626;
 }
 
 .card-header {
@@ -532,59 +592,36 @@ body.focus-mode .column.is-focus {
 }
 
 .card-body {
-  margin-top: 10px;
-  display: flex;
+  margin-top: 8px;
+  display: none;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
-.card-due {
+.card.expanded .card-body,
+.card.has-desc .card-body {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.card-due-label {
-  font-size: 12px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.card-due-input {
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 8px;
-  padding: 4px 6px;
-  font-size: 12px;
-  font-family: inherit;
-  color: var(--text);
-  background: #ffffff;
 }
 
 .card-desc-text {
   margin: 0;
   font-size: 13px;
   color: var(--muted);
-  display: none;
   white-space: pre-wrap;
+  line-height: 1.4;
 }
 
 .card-desc-input {
   display: none;
   resize: vertical;
-  min-height: 72px;
-  border-radius: 10px;
+  min-height: 60px;
+  border-radius: 8px;
   border: 1px solid rgba(15, 23, 42, 0.12);
   padding: 8px 10px;
   font-size: 13px;
   font-family: inherit;
   color: var(--text);
   background: #ffffff;
-}
-
-.card.has-desc .card-desc-text {
-  display: block;
 }
 
 .card.expanded .card-desc-text {
@@ -595,18 +632,28 @@ body.focus-mode .column.is-focus {
   display: block;
 }
 
+.card:not(.has-desc):not(.expanded) .card-body {
+  display: none;
+}
+
 .card-toggle {
   align-self: flex-start;
   border: 0;
   background: transparent;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
-  padding: 0;
+  padding: 4px 0;
   cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .card-toggle:hover {
   color: var(--text);
+}
+
+.card:not(.expanded) .card-toggle {
+  margin-top: 4px;
 }
 
 .btn {

@@ -38,12 +38,13 @@
       <div class="main-content">
         <header class="app-header">
           <div class="header-content">
+            <div class="layer-toggles" role="group" aria-label="Visible layers">
+              <button class="layer-toggle is-active" data-layer="status" disabled aria-pressed="true">Status</button>
+              <button class="layer-toggle" data-layer="time" aria-pressed="false">Time</button>
+              <button class="layer-toggle" data-layer="effort" aria-pressed="false">Effort</button>
+            </div>
             <div class="board-stats">
-              <span class="stat" data-stat="total"><strong id="stat-total">0</strong> tasks</span>
-              <span class="stat-divider"></span>
-              <span class="stat" data-stat="doing"><strong id="stat-doing">0</strong> in progress</span>
-              <span class="stat-divider"></span>
-              <span class="stat stat-success" data-stat="done"><strong id="stat-done">0</strong> completed</span>
+              <span class="stat"><strong id="stat-total">0</strong> tasks</span>
             </div>
           </div>
         </header>
@@ -105,12 +106,13 @@
           <input id="card-title" name="title" type="text" maxlength="80" required />
           <label for="card-due">Due date</label>
           <input id="card-due" name="dueDate" type="date" />
-          <label for="card-priority">Priority</label>
-          <select id="card-priority" name="priority">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
+          <label for="card-effort">Effort</label>
+          <select id="card-effort" name="effort">
+            <option value="" selected>No estimate</option>
+            <option value="15m">15 min</option>
+            <option value="30m">30 min</option>
+            <option value="1h">1 hour</option>
+            <option value="2h">2+ hours</option>
           </select>
           <div class="modal-actions">
             <button type="button" class="btn ghost" id="cancel">Cancel</button>

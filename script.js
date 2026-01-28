@@ -10,7 +10,8 @@ const modal = document.getElementById("card-modal");
 const form = document.getElementById("card-form");
 const titleInput = document.getElementById("card-title");
 const dueDateInput = document.getElementById("card-due");
-const priorityInput = document.getElementById("card-priority");
+const effortInput = document.getElementById("card-effort");
+const layerToggles = Array.from(document.querySelectorAll(".layer-toggle"));
 const cancelButton = document.getElementById("cancel");
 const focusToggle = document.getElementById("focus-toggle");
 const columns = Array.from(document.querySelectorAll(".column"));
@@ -22,6 +23,30 @@ let boardState = loadState();
 let focusMode = false;
 let focusIndex = 0;
 let activeView = "board";
+let visibleLayers = loadLayers();
+
+function loadLayers() {
+  try {
+    const raw = localStorage.getItem("layr-layers");
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { status: true, time: false, effort: false };
+}
+
+function saveLayers() {
+  localStorage.setItem("layr-layers", JSON.stringify(visibleLayers));
+}
+
+function applyLayers() {
+  document.body.classList.toggle("layer-time", visibleLayers.time);
+  document.body.classList.toggle("layer-effort", visibleLayers.effort);
+  layerToggles.forEach((btn) => {
+    const layer = btn.dataset.layer;
+    const isActive = visibleLayers[layer];
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-pressed", String(isActive));
+  });
+}
 
 function loadState() {
   try {
@@ -125,20 +150,6 @@ function createCardElement(card) {
   el.draggable = true;
   el.dataset.id = card.id;
 
-  const meta = document.createElement("div");
-  meta.className = "card-meta";
-
-  const priorityBadge = document.createElement("span");
-  priorityBadge.className = `priority-badge priority-${card.priority || "medium"}`;
-  priorityBadge.textContent = (card.priority || "medium").charAt(0).toUpperCase() + (card.priority || "medium").slice(1);
-
-  const timestamp = document.createElement("span");
-  timestamp.className = "card-timestamp";
-  timestamp.textContent = formatRelativeTime(card.createdAt);
-
-  meta.appendChild(priorityBadge);
-  meta.appendChild(timestamp);
-
   const header = document.createElement("div");
   header.className = "card-header";
 
@@ -157,13 +168,6 @@ function createCardElement(card) {
   const actions = document.createElement("div");
   actions.className = "card-actions";
 
-  const editButton = document.createElement("button");
-  editButton.type = "button";
-  editButton.className = "icon-button";
-  editButton.setAttribute("aria-label", "Edit title");
-  editButton.innerHTML =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.75V20h3.25l9.58-9.58-3.25-3.25L4 16.75zm15.71-9.04a1.003 1.003 0 0 0 0-1.42l-2-2a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.25 3.25 1.99-1.66z"/></svg>';
-
   const completeButton = document.createElement("button");
   completeButton.type = "button";
   completeButton.className = "icon-button complete-btn";
@@ -176,33 +180,38 @@ function createCardElement(card) {
   deleteButton.className = "icon-button delete-btn";
   deleteButton.setAttribute("aria-label", "Delete card");
   deleteButton.innerHTML =
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 7h2v8h-2v-8zm4 0h2v8h-2v-8z"/></svg>';
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>';
 
   actions.appendChild(completeButton);
-  actions.appendChild(editButton);
   actions.appendChild(deleteButton);
 
   header.appendChild(title);
   header.appendChild(titleInput);
   header.appendChild(actions);
 
-  const body = document.createElement("div");
-  body.className = "card-body";
-
-  const dueRow = document.createElement("div");
-  dueRow.className = "card-due";
+  // Layer info row (time + effort) - hidden by default via CSS
+  const layerInfo = document.createElement("div");
+  layerInfo.className = "card-layers";
 
   const dueLabel = document.createElement("span");
-  dueLabel.className = "card-due-label";
-  dueLabel.textContent = formatRelativeDue(card.dueDate);
+  dueLabel.className = "layer-time-info";
+  const dueText = formatRelativeDue(card.dueDate);
+  dueLabel.textContent = dueText || "No date";
+  if (card.status !== "done" && isOverdue(card.dueDate)) {
+    dueLabel.classList.add("is-overdue");
+  }
 
-  const dueInput = document.createElement("input");
-  dueInput.className = "card-due-input";
-  dueInput.type = "date";
-  dueInput.value = toDateInputValue(card.dueDate);
+  const effortChip = document.createElement("span");
+  effortChip.className = "layer-effort-info";
+  effortChip.textContent = card.effort || "—";
+  if (card.effort) effortChip.classList.add("has-effort");
 
-  dueRow.appendChild(dueLabel);
-  dueRow.appendChild(dueInput);
+  layerInfo.appendChild(dueLabel);
+  layerInfo.appendChild(effortChip);
+
+  // Context layer (expand on demand)
+  const body = document.createElement("div");
+  body.className = "card-body";
 
   const descText = document.createElement("p");
   descText.className = "card-desc-text";
@@ -211,27 +220,27 @@ function createCardElement(card) {
   const descInput = document.createElement("textarea");
   descInput.className = "card-desc-input";
   descInput.rows = 3;
-  descInput.placeholder = "Add a description...";
+  descInput.placeholder = "Add notes, links, context...";
   descInput.value = card.description || "";
 
   const toggleButton = document.createElement("button");
   toggleButton.type = "button";
   toggleButton.className = "card-toggle";
-  toggleButton.textContent = card.expanded ? "Collapse" : "Details";
+  toggleButton.textContent = card.expanded ? "Less" : "More";
 
-  body.appendChild(dueRow);
   body.appendChild(descText);
   body.appendChild(descInput);
   body.appendChild(toggleButton);
 
-  el.appendChild(meta);
   el.appendChild(header);
+  el.appendChild(layerInfo);
   el.appendChild(body);
 
   el.classList.toggle("expanded", Boolean(card.expanded));
   el.classList.toggle("has-desc", Boolean(card.description && card.description.trim()));
-  el.classList.toggle("is-overdue", card.status !== "done" && isOverdue(card.dueDate));
   el.classList.toggle("is-done", card.status === "done");
+  el.classList.toggle("has-due", Boolean(card.dueDate));
+  el.classList.toggle("has-effort", Boolean(card.effort));
 
   function startTitleEdit() {
     el.classList.add("editing-title");
@@ -257,7 +266,6 @@ function createCardElement(card) {
   title.addEventListener("keydown", (event) => {
     if (event.key === "Enter") startTitleEdit();
   });
-  editButton.addEventListener("click", startTitleEdit);
   titleInput.addEventListener("blur", () => finishTitleEdit(true));
   titleInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -296,12 +304,6 @@ function createCardElement(card) {
     descText.textContent = nextDesc;
     el.classList.toggle("has-desc", Boolean(nextDesc.trim()));
     updateCardState(card.id, { description: nextDesc });
-  });
-
-  dueInput.addEventListener("change", () => {
-    const nextDue = dueInput.value ? dueInput.value : null;
-    dueLabel.textContent = formatRelativeDue(nextDue);
-    updateCardState(card.id, { dueDate: nextDue });
   });
 
   el.addEventListener("dragstart", (event) => {
@@ -343,14 +345,8 @@ function renderColumn(columnKey) {
 
 function updateStats() {
   const total = boardState.tasks.length;
-  const doing = boardState.tasks.filter((t) => t.status === "doing").length;
-  const done = boardState.tasks.filter((t) => t.status === "done").length;
   const totalEl = document.getElementById("stat-total");
-  const doingEl = document.getElementById("stat-doing");
-  const doneEl = document.getElementById("stat-done");
   if (totalEl) totalEl.textContent = total;
-  if (doingEl) doingEl.textContent = doing;
-  if (doneEl) doneEl.textContent = done;
 }
 
 function renderBoard() {
@@ -431,9 +427,13 @@ function toggleFocusMode(force) {
   focusMode = typeof force === "boolean" ? force : !focusMode;
   document.body.classList.toggle("focus-mode", focusMode);
   focusToggle.setAttribute("aria-pressed", String(focusMode));
+  focusToggle.classList.toggle("is-active", focusMode);
   focusToggle.textContent = focusMode ? "Exit focus" : "Focus mode";
   if (focusMode) {
-    setFocusColumn(focusIndex);
+    const doingIndex = columns.findIndex(
+      (column) => column.dataset.column === "doing"
+    );
+    setFocusColumn(doingIndex === -1 ? 1 : doingIndex);
   } else {
     columns.forEach((column) => column.classList.remove("is-focus"));
   }
@@ -444,7 +444,7 @@ function openModal() {
   modal.setAttribute("aria-hidden", "false");
   titleInput.value = "";
   dueDateInput.value = "";
-  priorityInput.value = "medium";
+  effortInput.value = "";
   titleInput.focus();
 }
 
@@ -458,7 +458,7 @@ function addCard(title) {
     id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
     title,
     status: "todo",
-    priority: priorityInput.value || "medium",
+    effort: effortInput.value || null,
     dueDate: dueDateInput.value ? dueDateInput.value : null,
     createdAt: new Date().toISOString(),
     description: "",
@@ -480,6 +480,16 @@ function moveCard(cardId, targetColumn) {
 
 addButton.addEventListener("click", openModal);
 focusToggle.addEventListener("click", () => toggleFocusMode());
+
+layerToggles.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const layer = btn.dataset.layer;
+    if (layer === "status") return; // Status is always on
+    visibleLayers[layer] = !visibleLayers[layer];
+    saveLayers();
+    applyLayers();
+  });
+});
 
 navLinks.forEach((link) => {
   link.addEventListener("click", (event) => {
@@ -526,14 +536,13 @@ board.addEventListener("drop", (event) => {
 document.addEventListener("keydown", (event) => {
   if (!focusMode) return;
   if (event.target.matches("input, textarea")) return;
-  if (event.key === "1") setFocusColumn(0);
-  if (event.key === "2") setFocusColumn(1);
-  if (event.key === "3") setFocusColumn(2);
+  if (event.key === "Escape") toggleFocusMode(false);
 });
 
 renderBoard();
 renderToday();
 setActiveView(activeView);
+applyLayers();
 
 function setActiveView(view) {
   activeView = view;
