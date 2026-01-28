@@ -1,16 +1,16 @@
 :root {
   color-scheme: light;
-  --bg: #f7f8fa;
+  --bg: #f8f9fb;
   --surface: #ffffff;
-  --panel: #f3f4f6;
+  --panel: #f5f6f8;
   --text: #1f2937;
-  --muted: #6b7280;
-  --border: #e5e7eb;
+  --muted: #7a828e;
+  --border: #e7e9ee;
   --card: #ffffff;
-  --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-  --shadow-soft: 0 2px 6px rgba(15, 23, 42, 0.05);
-  --radius: 16px;
-  --radius-sm: 12px;
+  --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  --shadow-soft: 0 1px 4px rgba(15, 23, 42, 0.04);
+  --radius: 18px;
+  --radius-sm: 14px;
 }
 
 * {
@@ -25,19 +25,19 @@ body {
 }
 
 .app-header {
-  padding: 36px 20px 18px;
+  padding: 34px 20px 10px;
   text-align: center;
 }
 
 .app-header h1 {
   margin: 0;
-  font-size: 30px;
-  letter-spacing: -0.03em;
+  font-size: 28px;
+  letter-spacing: -0.02em;
   font-weight: 600;
 }
 
 .app-header p {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: var(--muted);
   font-size: 13px;
   letter-spacing: 0.01em;
@@ -46,17 +46,17 @@ body {
 .board {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-  padding: 18px 24px 40px;
-  max-width: 1160px;
-  margin: 0 auto 48px;
+  gap: 22px;
+  padding: 20px 28px 48px;
+  max-width: 1180px;
+  margin: 0 auto 52px;
 }
 
 .column {
   background: var(--panel);
-  border: 1px solid rgba(15, 23, 42, 0.05);
+  border: 1px solid rgba(15, 23, 42, 0.04);
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 18px;
   min-height: 360px;
   display: flex;
   flex-direction: column;
@@ -67,16 +67,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
-  padding: 6px 6px 2px;
+  margin-bottom: 16px;
+  padding: 4px 6px 6px;
 }
 
 .column h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text);
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.18em;
   font-weight: 600;
 }
 
@@ -95,7 +95,8 @@ body {
   box-shadow: var(--shadow);
   cursor: grab;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.5;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .card:active {
@@ -105,6 +106,124 @@ body {
 .card.dragging {
   opacity: 0.65;
   box-shadow: none;
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.card-title {
+  flex: 1;
+  font-weight: 600;
+  cursor: text;
+}
+
+.card-title-input {
+  display: none;
+  flex: 1;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  padding: 6px 8px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.card.editing-title .card-title {
+  display: none;
+}
+
+.card.editing-title .card-title-input {
+  display: block;
+}
+
+.card-actions {
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.card:hover .card-actions,
+.card:focus-within .card-actions {
+  opacity: 1;
+}
+
+.icon-button {
+  border: 0;
+  background: transparent;
+  padding: 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #9aa0aa;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.icon-button svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  display: block;
+}
+
+.icon-button:hover {
+  color: #4b5563;
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.card-body {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-desc-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  display: none;
+  white-space: pre-wrap;
+}
+
+.card-desc-input {
+  display: none;
+  resize: vertical;
+  min-height: 72px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: #ffffff;
+}
+
+.card.has-desc .card-desc-text {
+  display: block;
+}
+
+.card.expanded .card-desc-text {
+  display: none;
+}
+
+.card.expanded .card-desc-input {
+  display: block;
+}
+
+.card-toggle {
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 0;
+  cursor: pointer;
+}
+
+.card-toggle:hover {
+  color: var(--text);
 }
 
 .btn {
