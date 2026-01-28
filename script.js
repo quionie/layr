@@ -17,7 +17,7 @@ const focusToggle = document.getElementById("focus-toggle");
 const columns = Array.from(document.querySelectorAll(".column"));
 const navLinks = Array.from(document.querySelectorAll(".nav-link"));
 const viewPanels = Array.from(document.querySelectorAll("[data-view-panel]"));
-const todayList = document.getElementById("today-list");
+const todayContent = document.getElementById("today-content");
 
 let boardState = loadState();
 let focusMode = false;
@@ -150,6 +150,7 @@ function createCardElement(card) {
   el.draggable = true;
   el.dataset.id = card.id;
 
+  // === HEADER: Title + Actions ===
   const header = document.createElement("div");
   header.className = "card-header";
 
@@ -189,59 +190,132 @@ function createCardElement(card) {
   header.appendChild(titleInput);
   header.appendChild(actions);
 
-  // Layer info row (time + effort) - hidden by default via CSS
-  const layerInfo = document.createElement("div");
-  layerInfo.className = "card-layers";
+  // === META ROW: Always visible date & effort chips ===
+  const metaRow = document.createElement("div");
+  metaRow.className = "card-meta";
 
-  const dueLabel = document.createElement("span");
-  dueLabel.className = "layer-time-info";
-  const dueText = formatRelativeDue(card.dueDate);
-  dueLabel.textContent = dueText || "No date";
-  if (card.status !== "done" && isOverdue(card.dueDate)) {
-    dueLabel.classList.add("is-overdue");
+  // Helper to update meta display
+  function updateMetaDisplay() {
+    metaRow.innerHTML = "";
+
+    // Due date chip
+    if (card.dueDate) {
+      const dueChip = document.createElement("span");
+      dueChip.className = "card-chip card-chip-date";
+      const dueText = formatRelativeDue(card.dueDate);
+      if (card.status !== "done" && isOverdue(card.dueDate)) {
+        dueChip.classList.add("is-overdue");
+      }
+      dueChip.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg><span>${dueText}</span>`;
+      metaRow.appendChild(dueChip);
+    }
+
+    // Effort chip
+    if (card.effort) {
+      const effortChip = document.createElement("span");
+      effortChip.className = "card-chip card-chip-effort";
+      effortChip.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg><span>${card.effort}</span>`;
+      metaRow.appendChild(effortChip);
+    }
+
+    // Show meta row only if there's content
+    el.classList.toggle("has-meta", card.dueDate || card.effort);
   }
 
-  const effortChip = document.createElement("span");
-  effortChip.className = "layer-effort-info";
-  effortChip.textContent = card.effort || "—";
-  if (card.effort) effortChip.classList.add("has-effort");
+  updateMetaDisplay();
 
-  layerInfo.appendChild(dueLabel);
-  layerInfo.appendChild(effortChip);
-
-  // Context layer (expand on demand)
+  // === EXPANDABLE BODY: Description + Edit Fields ===
   const body = document.createElement("div");
   body.className = "card-body";
 
-  const descText = document.createElement("p");
-  descText.className = "card-desc-text";
-  descText.textContent = card.description || "";
+  // Description section
+  const descSection = document.createElement("div");
+  descSection.className = "card-section";
+
+  const descLabel = document.createElement("label");
+  descLabel.className = "card-label";
+  descLabel.textContent = "Notes";
 
   const descInput = document.createElement("textarea");
-  descInput.className = "card-desc-input";
-  descInput.rows = 3;
+  descInput.className = "card-input card-desc-input";
+  descInput.rows = 2;
   descInput.placeholder = "Add notes, links, context...";
   descInput.value = card.description || "";
 
+  descSection.appendChild(descLabel);
+  descSection.appendChild(descInput);
+
+  // Date & Effort row
+  const fieldsRow = document.createElement("div");
+  fieldsRow.className = "card-fields-row";
+
+  // Date field
+  const dateField = document.createElement("div");
+  dateField.className = "card-field";
+
+  const dateLabel = document.createElement("label");
+  dateLabel.className = "card-label";
+  dateLabel.textContent = "Due date";
+
+  const dateInput = document.createElement("input");
+  dateInput.className = "card-input card-date-input";
+  dateInput.type = "date";
+  dateInput.value = toDateInputValue(card.dueDate);
+
+  dateField.appendChild(dateLabel);
+  dateField.appendChild(dateInput);
+
+  // Effort field
+  const effortField = document.createElement("div");
+  effortField.className = "card-field";
+
+  const effortLabel = document.createElement("label");
+  effortLabel.className = "card-label";
+  effortLabel.textContent = "Effort";
+
+  const effortSelect = document.createElement("select");
+  effortSelect.className = "card-input card-effort-select";
+  effortSelect.innerHTML = `
+    <option value="">No estimate</option>
+    <option value="15m">15 min</option>
+    <option value="30m">30 min</option>
+    <option value="1h">1 hour</option>
+    <option value="2h">2+ hours</option>
+  `;
+  effortSelect.value = card.effort || "";
+
+  effortField.appendChild(effortLabel);
+  effortField.appendChild(effortSelect);
+
+  fieldsRow.appendChild(dateField);
+  fieldsRow.appendChild(effortField);
+
+  // Toggle button
   const toggleButton = document.createElement("button");
   toggleButton.type = "button";
   toggleButton.className = "card-toggle";
-  toggleButton.textContent = card.expanded ? "Less" : "More";
+  toggleButton.textContent = card.expanded ? "Collapse" : "Edit";
 
-  body.appendChild(descText);
-  body.appendChild(descInput);
-  body.appendChild(toggleButton);
+  body.appendChild(descSection);
+  body.appendChild(fieldsRow);
 
+  // === ASSEMBLE CARD ===
   el.appendChild(header);
-  el.appendChild(layerInfo);
+  el.appendChild(metaRow);
   el.appendChild(body);
+  el.appendChild(toggleButton);
 
+  // === APPLY INITIAL STATE CLASSES ===
   el.classList.toggle("expanded", Boolean(card.expanded));
   el.classList.toggle("has-desc", Boolean(card.description && card.description.trim()));
   el.classList.toggle("is-done", card.status === "done");
   el.classList.toggle("has-due", Boolean(card.dueDate));
   el.classList.toggle("has-effort", Boolean(card.effort));
+  el.classList.toggle("has-meta", Boolean(card.dueDate || card.effort));
 
+  // === EVENT HANDLERS ===
+
+  // Title editing
   function startTitleEdit() {
     el.classList.add("editing-title");
     titleInput.value = card.title;
@@ -278,6 +352,7 @@ function createCardElement(card) {
     }
   });
 
+  // Complete/Delete actions
   completeButton.addEventListener("click", () => {
     if (card.status === "done") {
       moveCard(card.id, "todo");
@@ -292,25 +367,47 @@ function createCardElement(card) {
     }
   });
 
+  // Toggle expand/collapse
   toggleButton.addEventListener("click", () => {
     const nextExpanded = !el.classList.contains("expanded");
     el.classList.toggle("expanded", nextExpanded);
-    toggleButton.textContent = nextExpanded ? "Collapse" : "Details";
+    toggleButton.textContent = nextExpanded ? "Collapse" : "Edit";
     updateCardState(card.id, { expanded: nextExpanded });
+    if (nextExpanded) {
+      descInput.focus();
+    }
   });
 
+  // Description auto-save
   descInput.addEventListener("input", () => {
     const nextDesc = descInput.value.trimEnd();
-    descText.textContent = nextDesc;
     el.classList.toggle("has-desc", Boolean(nextDesc.trim()));
     updateCardState(card.id, { description: nextDesc });
   });
 
+  // Date auto-save
+  dateInput.addEventListener("change", () => {
+    const nextDate = dateInput.value || null;
+    card.dueDate = nextDate;
+    el.classList.toggle("has-due", Boolean(nextDate));
+    updateCardState(card.id, { dueDate: nextDate });
+    updateMetaDisplay();
+  });
+
+  // Effort auto-save
+  effortSelect.addEventListener("change", () => {
+    const nextEffort = effortSelect.value || null;
+    card.effort = nextEffort;
+    el.classList.toggle("has-effort", Boolean(nextEffort));
+    updateCardState(card.id, { effort: nextEffort });
+    updateMetaDisplay();
+  });
+
+  // Drag & Drop
   el.addEventListener("dragstart", (event) => {
     if (
       event.target.closest(".card-actions") ||
-      event.target.closest(".card-title-input") ||
-      event.target.closest(".card-desc-input") ||
+      event.target.closest(".card-input") ||
       event.target.closest(".card-toggle")
     ) {
       event.preventDefault();
@@ -379,41 +476,156 @@ function isOverdue(dueDate) {
 }
 
 function renderToday() {
-  if (!todayList) return;
-  todayList.innerHTML = "";
-  const tasks = boardState.tasks
-    .filter((task) => task.status !== "done")
-    .filter((task) => isDueToday(task.dueDate) || task.status === "doing");
+  if (!todayContent) return;
+  todayContent.innerHTML = "";
 
-  const sorted = tasks.sort((a, b) => {
-    const aDue = isDueToday(a.dueDate);
-    const bDue = isDueToday(b.dueDate);
-    if (aDue !== bDue) return aDue ? -1 : 1;
-    if (a.dueDate && b.dueDate) {
-      return new Date(a.dueDate) - new Date(b.dueDate);
-    }
-    if (a.status !== b.status) {
-      return a.status === "doing" ? -1 : 1;
-    }
-    return new Date(a.createdAt) - new Date(b.createdAt);
-  });
+  // Get all relevant tasks
+  const allTasks = boardState.tasks.filter((task) => task.status !== "done");
 
-  sorted.forEach((task) => {
+  // Categorize tasks
+  const inProgress = allTasks.filter((task) => task.status === "doing");
+  const dueToday = allTasks.filter((task) => task.status !== "doing" && isDueToday(task.dueDate));
+  const overdue = allTasks.filter((task) => task.status !== "doing" && isOverdue(task.dueDate));
+
+  // Check if there are any tasks to show
+  const hasAnyTasks = inProgress.length > 0 || dueToday.length > 0 || overdue.length > 0;
+
+  if (!hasAnyTasks) {
+    // Render empty state
+    const emptyState = document.createElement("div");
+    emptyState.className = "today-empty";
+    emptyState.innerHTML = `
+      <svg class="today-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      <h3>All clear for today</h3>
+      <p>No tasks due today or in progress. Enjoy your free time or add new tasks from the Board.</p>
+    `;
+    todayContent.appendChild(emptyState);
+    return;
+  }
+
+  // Helper function to create a section
+  function createSection(title, tasks, badgeType) {
+    if (tasks.length === 0) return null;
+
+    const section = document.createElement("div");
+    section.className = "today-section";
+
+    const header = document.createElement("div");
+    header.className = "today-section-header";
+
+    const sectionTitle = document.createElement("span");
+    sectionTitle.className = "today-section-title";
+    sectionTitle.textContent = title;
+
+    const sectionCount = document.createElement("span");
+    sectionCount.className = "today-section-count";
+    sectionCount.textContent = tasks.length;
+
+    header.appendChild(sectionTitle);
+    header.appendChild(sectionCount);
+
+    const list = document.createElement("div");
+    list.className = "today-list";
+
+    tasks.forEach((task) => {
+      list.appendChild(createTodayItem(task, badgeType));
+    });
+
+    section.appendChild(header);
+    section.appendChild(list);
+    return section;
+  }
+
+  // Helper function to create a today item
+  function createTodayItem(task, badgeType) {
     const item = document.createElement("div");
     item.className = "today-item";
+
+    // Add state classes
+    if (task.status === "doing") item.classList.add("is-doing");
+    if (isDueToday(task.dueDate)) item.classList.add("is-due-today");
+    if (isOverdue(task.dueDate)) item.classList.add("is-overdue");
+
+    // Content wrapper
+    const content = document.createElement("div");
+    content.className = "today-item-content";
 
     const title = document.createElement("div");
     title.className = "today-item-title";
     title.textContent = task.title;
+    content.appendChild(title);
 
-    const meta = document.createElement("div");
-    meta.className = "today-item-meta";
-    meta.textContent = task.status === "doing" ? "Doing" : "Due today";
+    // Add description preview if exists
+    if (task.description && task.description.trim()) {
+      const desc = document.createElement("div");
+      desc.className = "today-item-desc";
+      desc.textContent = task.description;
+      content.appendChild(desc);
+    }
 
-    item.appendChild(title);
-    item.appendChild(meta);
-    todayList.appendChild(item);
-  });
+    item.appendChild(content);
+
+    // Footer with badges
+    const footer = document.createElement("div");
+    footer.className = "today-item-footer";
+
+    // Status badge
+    const badge = document.createElement("span");
+    badge.className = `today-badge badge-${badgeType}`;
+
+    const dot = document.createElement("span");
+    dot.className = "today-badge-dot";
+    badge.appendChild(dot);
+
+    const badgeText = document.createElement("span");
+    if (badgeType === "doing") {
+      badgeText.textContent = "In Progress";
+    } else if (badgeType === "overdue") {
+      badgeText.textContent = formatRelativeDue(task.dueDate);
+    } else {
+      badgeText.textContent = "Due Today";
+    }
+    badge.appendChild(badgeText);
+    footer.appendChild(badge);
+
+    // Effort chip if exists
+    if (task.effort) {
+      const effort = document.createElement("span");
+      effort.className = "today-effort";
+      effort.textContent = task.effort;
+      footer.appendChild(effort);
+    }
+
+    item.appendChild(footer);
+
+    // Click to navigate to board and highlight the card
+    item.addEventListener("click", () => {
+      setActiveView("board");
+      // Small delay to let the view switch
+      setTimeout(() => {
+        const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
+        if (cardEl) {
+          cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          cardEl.style.animation = "none";
+          cardEl.offsetHeight; // Trigger reflow
+          cardEl.style.animation = "cardEnter 0.3s ease";
+        }
+      }, 100);
+    });
+
+    return item;
+  }
+
+  // Render sections in order: Overdue, In Progress, Due Today
+  const overdueSection = createSection("Overdue", overdue, "overdue");
+  const inProgressSection = createSection("In Progress", inProgress, "doing");
+  const dueTodaySection = createSection("Due Today", dueToday, "due");
+
+  if (overdueSection) todayContent.appendChild(overdueSection);
+  if (inProgressSection) todayContent.appendChild(inProgressSection);
+  if (dueTodaySection) todayContent.appendChild(dueTodaySection);
 }
 
 function setFocusColumn(index) {
