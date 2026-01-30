@@ -24,9 +24,21 @@ const backlogCountEl = document.getElementById("backlog-count");
 const viewModeBtns = Array.from(document.querySelectorAll(".view-mode-btn"));
 const defaultViewSelect = document.getElementById("default-view");
 
+// Timeline elements
+const timelineGrid = document.getElementById("timeline-grid");
+const timelineDateRange = document.getElementById("timeline-date-range");
+const timelineUnscheduledList = document.getElementById("timeline-unscheduled-list");
+const timelineUnscheduledCount = document.getElementById("timeline-unscheduled-count");
+const timelineModeBtns = Array.from(document.querySelectorAll(".timeline-mode-btn"));
+const timelinePrevBtn = document.getElementById("timeline-prev");
+const timelineNextBtn = document.getElementById("timeline-next");
+const timelineTodayBtn = document.getElementById("timeline-today");
+
 let boardState = loadState();
 let backlogGroupMode = "schedule"; // "schedule" or "effort"
 let backlogSearchQuery = "";
+let timelineMode = "week"; // "week" or "month"
+let timelineStartDate = getWeekStart(new Date());
 let focusMode = false;
 let focusIndex = 0;
 let settings = loadSettings();
@@ -1282,6 +1294,422 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// ==================== TIMELINE VIEW ====================
+
+function getWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday as start
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getMonthStart(date) {
+  const d = new Date(date);
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function isSameDay(d1, d2) {
+  return d1.getFullYear() === d2.getFullYear() &&
+         d1.getMonth() === d2.getMonth() &&
+         d1.getDate() === d2.getDate();
+}
+
+function formatDateRange(startDate, numDays) {
+  const endDate = addDays(startDate, numDays - 1);
+  const options = { month: "short", day: "numeric" };
+  const startStr = startDate.toLocaleDateString("en-US", options);
+  const endStr = endDate.toLocaleDateString("en-US", { ...options, year: "numeric" });
+  return `${startStr} - ${endStr}`;
+}
+
+function getTimelineDays() {
+  const days = [];
+  const numDays = timelineMode === "week" ? 7 : 28;
+
+  for (let i = 0; i < numDays; i++) {
+    const date = addDays(timelineStartDate, i);
+    days.push({
+      date,
+      dayName: date.toLocaleDateString("en-US", { weekday: "short" }),
+      dayNum: date.getDate(),
+      isToday: isSameDay(date, new Date()),
+      isWeekend: date.getDay() === 0 || date.getDay() === 6,
+    });
+  }
+  return days;
+}
+
+function getTasksForTimeline() {
+  // Get tasks that have due dates (for display on timeline)
+  return boardState.tasks.filter(task => task.dueDate && task.status !== "done");
+}
+
+function getUnscheduledTasks() {
+  // Tasks without due dates that are not done
+  return boardState.tasks.filter(task => !task.dueDate && task.status !== "done");
+}
+
+function getTaskDayIndex(task, days) {
+  if (!task.dueDate) return -1;
+  const taskDate = new Date(task.dueDate);
+  taskDate.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < days.length; i++) {
+    if (isSameDay(days[i].date, taskDate)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function renderTimeline() {
+  if (!timelineGrid) return;
+
+  const days = getTimelineDays();
+  const scheduledTasks = getTasksForTimeline();
+  const unscheduledTasks = getUnscheduledTasks();
+  const numDays = days.length;
+
+  // Update date range display
+  if (timelineDateRange) {
+    timelineDateRange.textContent = formatDateRange(timelineStartDate, numDays);
+  }
+
+  // Update unscheduled count
+  if (timelineUnscheduledCount) {
+    timelineUnscheduledCount.textContent = unscheduledTasks.length;
+  }
+
+  // Build grid columns style
+  const gridCols = timelineMode === "week"
+    ? "repeat(7, 1fr)"
+    : "repeat(7, 1fr)"; // Show weeks in rows for month view
+
+  // Clear grid
+  timelineGrid.innerHTML = "";
+
+  // Create days header
+  const daysHeader = document.createElement("div");
+  daysHeader.className = "timeline-days-header";
+  daysHeader.style.gridTemplateColumns = gridCols;
+
+  // For month view, we show 4 weeks
+  const displayDays = timelineMode === "week" ? days : days.slice(0, 7);
+
+  displayDays.forEach(day => {
+    const col = document.createElement("div");
+    col.className = "timeline-day-col";
+    if (day.isToday) col.classList.add("is-today");
+    if (day.isWeekend) col.classList.add("is-weekend");
+
+    col.innerHTML = `
+      <span class="timeline-day-name">${day.dayName}</span>
+      <span class="timeline-day-num">${day.dayNum}</span>
+    `;
+    daysHeader.appendChild(col);
+  });
+
+  timelineGrid.appendChild(daysHeader);
+
+  // Create rows container
+  const rowsContainer = document.createElement("div");
+  rowsContainer.className = "timeline-rows";
+
+  if (timelineMode === "week") {
+    // Week view: each task gets its own row
+    const tasksInView = scheduledTasks.filter(task => {
+      const idx = getTaskDayIndex(task, days);
+      return idx !== -1;
+    });
+
+    // Sort by date, then by status (doing first)
+    tasksInView.sort((a, b) => {
+      if (a.status === "doing" && b.status !== "doing") return -1;
+      if (b.status === "doing" && a.status !== "doing") return 1;
+      return new Date(a.dueDate) - new Date(b.dueDate);
+    });
+
+    if (tasksInView.length === 0) {
+      // Empty state
+      const emptyState = document.createElement("div");
+      emptyState.className = "timeline-empty";
+      emptyState.innerHTML = `
+        <div class="timeline-empty-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect>
+            <line x1="16" x2="16" y1="2" y2="6"></line>
+            <line x1="8" x2="8" y1="2" y2="6"></line>
+            <line x1="3" x2="21" y1="10" y2="10"></line>
+          </svg>
+        </div>
+        <h3>No scheduled tasks this week</h3>
+        <p>Drag tasks from below or set due dates on the Board to see them here</p>
+      `;
+      rowsContainer.appendChild(emptyState);
+    } else {
+      tasksInView.forEach(task => {
+        const row = document.createElement("div");
+        row.className = "timeline-row";
+        row.style.gridTemplateColumns = gridCols;
+
+        // Create cells for each day
+        days.forEach((day) => {
+          const cell = document.createElement("div");
+          cell.className = "timeline-cell";
+          if (day.isToday) cell.classList.add("is-today");
+          if (day.isWeekend) cell.classList.add("is-weekend");
+          cell.dataset.date = day.date.toISOString().split("T")[0];
+
+          // Add drop zone behavior
+          cell.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            cell.classList.add("drop-target");
+          });
+          cell.addEventListener("dragleave", () => {
+            cell.classList.remove("drop-target");
+          });
+          cell.addEventListener("drop", (e) => {
+            e.preventDefault();
+            cell.classList.remove("drop-target");
+            const taskId = e.dataTransfer.getData("text/plain");
+            if (taskId) {
+              const found = findTask(taskId);
+              if (found) {
+                found.task.dueDate = cell.dataset.date;
+                saveState();
+                renderTimeline();
+                renderBoard();
+              }
+            }
+          });
+
+          row.appendChild(cell);
+        });
+
+        // Add task bar
+        const taskDayIndex = getTaskDayIndex(task, days);
+        if (taskDayIndex !== -1) {
+          const taskBar = document.createElement("div");
+          taskBar.className = "timeline-task-bar";
+          if (task.status === "doing") taskBar.classList.add("status-doing");
+          if (task.status === "done") taskBar.classList.add("status-done");
+          if (isOverdue(task.dueDate) && task.status !== "done") {
+            taskBar.classList.add("is-overdue");
+          }
+
+          // Position the bar
+          const cellWidth = 100 / numDays;
+          taskBar.style.left = `calc(${taskDayIndex * cellWidth}% + 4px)`;
+          taskBar.style.width = `calc(${cellWidth}% - 8px)`;
+
+          taskBar.innerHTML = `<span class="timeline-task-title">${escapeHtml(task.title)}</span>`;
+
+          // Click to navigate to board
+          taskBar.addEventListener("click", () => {
+            setActiveView("board");
+            setTimeout(() => {
+              const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
+              if (cardEl) {
+                cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                cardEl.classList.add("highlight");
+                setTimeout(() => cardEl.classList.remove("highlight"), 1500);
+              }
+            }, 100);
+          });
+
+          row.appendChild(taskBar);
+        }
+
+        rowsContainer.appendChild(row);
+      });
+    }
+  } else {
+    // Month view: show 4 weeks
+    for (let week = 0; week < 4; week++) {
+      const weekDays = days.slice(week * 7, (week + 1) * 7);
+      const row = document.createElement("div");
+      row.className = "timeline-row";
+      row.style.gridTemplateColumns = gridCols;
+
+      weekDays.forEach((day) => {
+        const cell = document.createElement("div");
+        cell.className = "timeline-cell";
+        if (day.isToday) cell.classList.add("is-today");
+        if (day.isWeekend) cell.classList.add("is-weekend");
+        cell.dataset.date = day.date.toISOString().split("T")[0];
+
+        // Show day number in month view
+        const dayLabel = document.createElement("span");
+        dayLabel.style.cssText = "position: absolute; top: 4px; left: 6px; font-size: 10px; color: var(--text-faint);";
+        dayLabel.textContent = day.dayNum;
+        cell.appendChild(dayLabel);
+
+        // Add drop zone behavior
+        cell.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          cell.classList.add("drop-target");
+        });
+        cell.addEventListener("dragleave", () => {
+          cell.classList.remove("drop-target");
+        });
+        cell.addEventListener("drop", (e) => {
+          e.preventDefault();
+          cell.classList.remove("drop-target");
+          const taskId = e.dataTransfer.getData("text/plain");
+          if (taskId) {
+            const found = findTask(taskId);
+            if (found) {
+              found.task.dueDate = cell.dataset.date;
+              saveState();
+              renderTimeline();
+              renderBoard();
+            }
+          }
+        });
+
+        // Find tasks for this day
+        const dayTasks = scheduledTasks.filter(t => {
+          const tDate = new Date(t.dueDate);
+          return isSameDay(tDate, day.date);
+        });
+
+        dayTasks.forEach(task => {
+          const dot = document.createElement("div");
+          dot.className = "timeline-milestone";
+          if (task.status === "doing") {
+            dot.style.background = "var(--warning)";
+          } else if (isOverdue(task.dueDate)) {
+            dot.style.background = "var(--error)";
+          }
+          dot.title = task.title;
+          dot.style.left = "50%";
+          dot.addEventListener("click", () => {
+            setActiveView("board");
+            setTimeout(() => {
+              const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
+              if (cardEl) {
+                cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                cardEl.classList.add("highlight");
+                setTimeout(() => cardEl.classList.remove("highlight"), 1500);
+              }
+            }, 100);
+          });
+          cell.appendChild(dot);
+        });
+
+        row.appendChild(cell);
+      });
+
+      rowsContainer.appendChild(row);
+    }
+  }
+
+  timelineGrid.appendChild(rowsContainer);
+
+  // Render unscheduled tasks
+  renderTimelineUnscheduled(unscheduledTasks);
+}
+
+function renderTimelineUnscheduled(tasks) {
+  if (!timelineUnscheduledList) return;
+  timelineUnscheduledList.innerHTML = "";
+
+  if (tasks.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "timeline-unscheduled-empty";
+    empty.textContent = "All tasks are scheduled";
+    timelineUnscheduledList.appendChild(empty);
+    return;
+  }
+
+  tasks.forEach(task => {
+    const item = document.createElement("div");
+    item.className = "timeline-unscheduled-item";
+    item.draggable = true;
+    item.textContent = task.title;
+    item.dataset.taskId = task.id;
+
+    item.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", task.id);
+      item.classList.add("dragging");
+    });
+
+    item.addEventListener("dragend", () => {
+      item.classList.remove("dragging");
+    });
+
+    // Click to go to board
+    item.addEventListener("click", () => {
+      setActiveView("board");
+      setTimeout(() => {
+        const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
+        if (cardEl) {
+          cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          cardEl.classList.add("highlight");
+          setTimeout(() => cardEl.classList.remove("highlight"), 1500);
+        }
+      }, 100);
+    });
+
+    timelineUnscheduledList.appendChild(item);
+  });
+}
+
+function navigateTimeline(direction) {
+  const amount = timelineMode === "week" ? 7 : 28;
+  if (direction === "prev") {
+    timelineStartDate = addDays(timelineStartDate, -amount);
+  } else {
+    timelineStartDate = addDays(timelineStartDate, amount);
+  }
+  renderTimeline();
+}
+
+function goToTimelineToday() {
+  timelineStartDate = timelineMode === "week"
+    ? getWeekStart(new Date())
+    : getMonthStart(new Date());
+  renderTimeline();
+}
+
+// Timeline event handlers
+if (timelinePrevBtn) {
+  timelinePrevBtn.addEventListener("click", () => navigateTimeline("prev"));
+}
+
+if (timelineNextBtn) {
+  timelineNextBtn.addEventListener("click", () => navigateTimeline("next"));
+}
+
+if (timelineTodayBtn) {
+  timelineTodayBtn.addEventListener("click", goToTimelineToday);
+}
+
+timelineModeBtns.forEach(btn => {
+  btn.addEventListener("click", () => {
+    const mode = btn.dataset.mode;
+    if (mode === timelineMode) return;
+    timelineMode = mode;
+    timelineModeBtns.forEach(b => b.classList.toggle("is-active", b.dataset.mode === mode));
+
+    // Reset to current week/month
+    timelineStartDate = mode === "week"
+      ? getWeekStart(new Date())
+      : getMonthStart(new Date());
+    renderTimeline();
+  });
+});
+
 function setFocusColumn(index) {
   focusIndex = Math.max(0, Math.min(index, columns.length - 1));
   columns.forEach((column, columnIndex) => {
@@ -1459,6 +1887,9 @@ function setActiveView(view) {
   }
   if (activeView === "backlog") {
     renderBacklog();
+  }
+  if (activeView === "timeline") {
+    renderTimeline();
   }
   if (activeView === "settings" && defaultViewSelect) {
     defaultViewSelect.value = settings.defaultView || "board";
