@@ -1754,6 +1754,66 @@ body.focus-mode .sidebar .focus-toggle {
   margin-bottom: 20px;
 }
 
+.backlog-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.backlog-summary-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: var(--shadow-sm);
+}
+
+.backlog-summary-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.backlog-summary-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.backlog-batch-bar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(135deg, rgba(129, 140, 248, 0.12), rgba(255, 255, 255, 0)) , var(--bg-elevated);
+  margin-bottom: 14px;
+}
+
+.backlog-batch-bar.is-active {
+  display: flex;
+}
+
+.backlog-batch-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.backlog-batch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .backlog-header h2 {
   margin: 0;
   font-size: 28px;
@@ -1793,6 +1853,14 @@ body.focus-mode .sidebar .focus-toggle {
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+}
+
+.backlog-selection-mode .backlog-item-select {
+  display: inline-flex;
+}
+
+.backlog-item-select {
+  display: none;
 }
 
 .backlog-search {
@@ -1954,6 +2022,15 @@ body.focus-mode .sidebar .focus-toggle {
   transition: all 0.15s ease;
 }
 
+.backlog-item.is-selected {
+  background: rgba(129, 140, 248, 0.12);
+  border-color: rgba(129, 140, 248, 0.3);
+}
+
+.backlog-item.is-focused {
+  outline: none;
+}
+
 .backlog-item:last-child {
   border-bottom: none;
 }
@@ -1999,6 +2076,16 @@ body.focus-mode .sidebar .focus-toggle {
   opacity: 1;
 }
 
+.backlog-item-select {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
 .backlog-item-content {
   display: flex;
   flex-direction: column;
@@ -2021,6 +2108,17 @@ body.focus-mode .sidebar .focus-toggle {
   gap: 10px;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.backlog-item-date {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  width: min(180px, 100%);
 }
 
 .backlog-item-meta .due-chip {
@@ -2196,6 +2294,15 @@ body.focus-mode .sidebar .focus-toggle {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+  }
+
+  .backlog-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .backlog-batch-bar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .backlog-search {

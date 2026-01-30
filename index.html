@@ -139,6 +139,38 @@
                   <span class="backlog-stat" id="backlog-count">0 items</span>
                 </div>
               </div>
+              <div class="backlog-summary">
+                <div class="backlog-summary-card">
+                  <span class="backlog-summary-label">This week</span>
+                  <span class="backlog-summary-value" id="backlog-summary-this-week">0</span>
+                </div>
+                <div class="backlog-summary-card">
+                  <span class="backlog-summary-label">Next week</span>
+                  <span class="backlog-summary-value" id="backlog-summary-next-week">0</span>
+                </div>
+                <div class="backlog-summary-card">
+                  <span class="backlog-summary-label">Unscheduled</span>
+                  <span class="backlog-summary-value" id="backlog-summary-unscheduled">0</span>
+                </div>
+                <div class="backlog-summary-card">
+                  <span class="backlog-summary-label">Blocked</span>
+                  <span class="backlog-summary-value" id="backlog-summary-blocked">0</span>
+                </div>
+              </div>
+              <div class="backlog-batch-bar" id="backlog-batch-bar">
+                <div class="backlog-batch-left">
+                  <span class="backlog-batch-count" id="backlog-selected-count">0 selected</span>
+                </div>
+                <div class="backlog-batch-actions">
+                  <button class="btn" type="button" id="backlog-batch-today">Today</button>
+                  <button class="btn" type="button" id="backlog-batch-tomorrow">Tomorrow</button>
+                  <button class="btn" type="button" id="backlog-batch-next-week">Next week</button>
+                  <button class="btn" type="button" id="backlog-batch-start">Start</button>
+                  <button class="btn ghost" type="button" id="backlog-batch-done">Done</button>
+                  <button class="btn ghost" type="button" id="backlog-batch-archive">Archive</button>
+                  <button class="btn ghost" type="button" id="backlog-batch-clear">Clear</button>
+                </div>
+              </div>
               <div class="backlog-toolbar">
                 <div class="backlog-search">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -168,6 +200,7 @@
                     </svg>
                   </button>
                 </div>
+                <button class="btn ghost" id="backlog-select-toggle" type="button">Select</button>
               </div>
             </div>
             <div id="backlog-content"></div>

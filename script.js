@@ -29,6 +29,21 @@ const backlogSearchInput = document.getElementById("backlog-search-input");
 const backlogCountEl = document.getElementById("backlog-count");
 const viewModeBtns = Array.from(document.querySelectorAll(".view-mode-btn"));
 const defaultViewSelect = document.getElementById("default-view");
+const backlogContainer = document.querySelector(".backlog-container");
+const backlogSelectToggle = document.getElementById("backlog-select-toggle");
+const backlogSummaryThisWeek = document.getElementById("backlog-summary-this-week");
+const backlogSummaryNextWeek = document.getElementById("backlog-summary-next-week");
+const backlogSummaryUnscheduled = document.getElementById("backlog-summary-unscheduled");
+const backlogSummaryBlocked = document.getElementById("backlog-summary-blocked");
+const backlogBatchBar = document.getElementById("backlog-batch-bar");
+const backlogSelectedCount = document.getElementById("backlog-selected-count");
+const backlogBatchToday = document.getElementById("backlog-batch-today");
+const backlogBatchTomorrow = document.getElementById("backlog-batch-tomorrow");
+const backlogBatchNextWeek = document.getElementById("backlog-batch-next-week");
+const backlogBatchStart = document.getElementById("backlog-batch-start");
+const backlogBatchDone = document.getElementById("backlog-batch-done");
+const backlogBatchArchive = document.getElementById("backlog-batch-archive");
+const backlogBatchClear = document.getElementById("backlog-batch-clear");
 const defaultTimelineSelect = document.getElementById("default-timeline-mode");
 const defaultBacklogGroupSelect = document.getElementById("default-backlog-group");
 const deleteBehaviorSelect = document.getElementById("delete-behavior");
@@ -75,7 +90,7 @@ let timelineStartDate = getWeekStart(new Date());
 let focusMode = false;
 let focusIndex = 0;
 let settings = loadSettings();
-let activeView = settings.defaultView || "board";
+let activeView = settings.lastActiveView || settings.defaultView || "board";
 let visibleLayers = loadLayers();
 let archiveSearchQuery = "";
 let archiveRange = "all";
@@ -84,6 +99,9 @@ let selectedTimelineTaskId = null;
 let timelineFilter = "all";
 let timelineHideEmptyWeeks = false;
 let timelineShowWorkload = true;
+let backlogSelectedIds = new Set();
+let backlogFocusedId = null;
+let backlogSelectionMode = false;
 
 if (timelineHideEmptyToggle) timelineHideEmptyWeeks = timelineHideEmptyToggle.checked;
 if (timelineShowWorkloadToggle) timelineShowWorkload = timelineShowWorkloadToggle.checked;
@@ -345,6 +363,81 @@ function clearTimelinePreview() {
 function isDateInRange(date, start, end) {
   if (!date || !start || !end) return false;
   return date >= start && date <= end;
+}
+
+function updateBacklogBatchBar() {
+  if (!backlogBatchBar || !backlogSelectedCount) return;
+  const count = backlogSelectedIds.size;
+  backlogSelectedCount.textContent = `${count} selected`;
+  backlogBatchBar.classList.toggle("is-active", backlogSelectionMode && count > 0);
+}
+
+function setBacklogSelection(ids) {
+  backlogSelectedIds = new Set(ids);
+  updateBacklogBatchBar();
+}
+
+function clearBacklogSelection() {
+  backlogSelectedIds.clear();
+  backlogFocusedId = null;
+  updateBacklogBatchBar();
+}
+
+function setBacklogSelectionMode(nextMode) {
+  backlogSelectionMode = nextMode;
+  if (backlogContainer) {
+    backlogContainer.classList.toggle("backlog-selection-mode", backlogSelectionMode);
+  }
+  if (!backlogSelectionMode) {
+    clearBacklogSelection();
+  }
+  updateBacklogBatchBar();
+}
+
+function toggleBacklogSelection(taskId) {
+  if (backlogSelectedIds.has(taskId)) {
+    backlogSelectedIds.delete(taskId);
+  } else {
+    backlogSelectedIds.add(taskId);
+  }
+  backlogFocusedId = taskId;
+  updateBacklogBatchBar();
+}
+
+function setBacklogFocus(taskId) {
+  backlogFocusedId = taskId;
+  document.querySelectorAll(".backlog-item.is-focused").forEach((el) => el.classList.remove("is-focused"));
+  if (!taskId) return;
+  const el = document.querySelector(`.backlog-item[data-task-id="${taskId}"]`);
+  if (el) el.classList.add("is-focused");
+}
+
+function getVisibleBacklogIds() {
+  return Array.from(document.querySelectorAll(".backlog-item"))
+    .map((el) => el.dataset.taskId)
+    .filter(Boolean);
+}
+
+function applyBatchToSelected(action) {
+  if (backlogSelectedIds.size === 0) return;
+  const ids = Array.from(backlogSelectedIds);
+  ids.forEach((id) => {
+    const found = findTask(id);
+    if (!found) return;
+    if (action === "start") setTaskStatus(found.task, "doing");
+    if (action === "done") setTaskStatus(found.task, "done");
+    if (action === "archive") archiveCard(id);
+    if (action === "today") found.task.dueDate = toLocalDateString(new Date());
+    if (action === "tomorrow") found.task.dueDate = toLocalDateString(addDays(new Date(), 1));
+    if (action === "next-week") found.task.dueDate = toLocalDateString(addDays(new Date(), 7));
+  });
+  saveState();
+  clearBacklogSelection();
+  renderBacklog();
+  renderBoard();
+  renderToday();
+  renderTimeline();
+  updateStats();
 }
 
 function setTaskStatus(task, nextStatus) {
@@ -1249,6 +1342,19 @@ function renderBacklog() {
   backlogContent.innerHTML = "";
 
   const allBacklogTasks = getBacklogTasks();
+  const blockedCount = allBacklogTasks.filter((task) => {
+    if (!task.blockedBy) return false;
+    const blocker = boardState.tasks.find((b) => b.id === task.blockedBy);
+    return blocker && blocker.status !== "done" && blocker.status !== "archived";
+  }).length;
+  const summaryThisWeek = allBacklogTasks.filter((t) => isThisWeek(t.dueDate)).length;
+  const summaryNextWeek = allBacklogTasks.filter((t) => isNextWeek(t.dueDate)).length;
+  const summaryUnscheduled = allBacklogTasks.filter((t) => !t.dueDate).length;
+
+  if (backlogSummaryThisWeek) backlogSummaryThisWeek.textContent = summaryThisWeek;
+  if (backlogSummaryNextWeek) backlogSummaryNextWeek.textContent = summaryNextWeek;
+  if (backlogSummaryUnscheduled) backlogSummaryUnscheduled.textContent = summaryUnscheduled;
+  if (backlogSummaryBlocked) backlogSummaryBlocked.textContent = blockedCount;
 
   // Apply search filter
   const searchTerm = backlogSearchQuery.toLowerCase().trim();
@@ -1258,6 +1364,13 @@ function renderBacklog() {
         (task.description && task.description.toLowerCase().includes(searchTerm))
       )
     : allBacklogTasks;
+
+  const filteredIds = new Set(filteredTasks.map((t) => t.id));
+  backlogSelectedIds = new Set(Array.from(backlogSelectedIds).filter((id) => filteredIds.has(id)));
+  updateBacklogBatchBar();
+  if (backlogFocusedId && !filteredIds.has(backlogFocusedId)) {
+    backlogFocusedId = null;
+  }
 
   // Update count
   if (backlogCountEl) {
@@ -1300,6 +1413,12 @@ function renderBacklog() {
   } else if (backlogGroupMode === "priority") {
     renderBacklogByPriority(filteredTasks);
   }
+
+  if (!backlogFocusedId) {
+    const firstId = filteredTasks[0]?.id;
+    if (firstId) backlogFocusedId = firstId;
+  }
+  setBacklogFocus(backlogFocusedId);
 }
 
 function renderBacklogBySchedule(tasks) {
@@ -1406,6 +1525,9 @@ function createBacklogItem(task) {
   const item = document.createElement("div");
   item.className = "backlog-item";
   item.dataset.taskId = task.id;
+  if (backlogSelectedIds.has(task.id)) {
+    item.classList.add("is-selected");
+  }
 
   // Build meta info
   let metaHtml = "";
@@ -1419,6 +1541,7 @@ function createBacklogItem(task) {
 
   item.innerHTML = `
     <div class="backlog-item-main">
+      <input class="backlog-item-select" type="checkbox" title="Select task" ${backlogSelectedIds.has(task.id) ? "checked" : ""} />
       <div class="backlog-item-checkbox" title="Mark as done">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="20 6 9 17 4 12"></polyline>
@@ -1427,20 +1550,13 @@ function createBacklogItem(task) {
       <div class="backlog-item-content">
         <span class="backlog-item-title">${escapeHtml(task.title)}</span>
         ${metaHtml ? `<div class="backlog-item-meta">${metaHtml}</div>` : ""}
+        <input class="backlog-item-date" type="date" value="${task.dueDate ? toDateInputValue(task.dueDate) : ""}" />
       </div>
     </div>
     <div class="backlog-item-actions">
       <button class="backlog-action-btn start-btn" title="Start working">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polygon points="5 3 19 12 5 21 5 3"></polygon>
-        </svg>
-      </button>
-      <button class="backlog-action-btn schedule-btn" title="Set due date">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect width="18" height="18" x="3" y="4" rx="2" ry="2"></rect>
-          <line x1="16" x2="16" y1="2" y2="6"></line>
-          <line x1="8" x2="8" y1="2" y2="6"></line>
-          <line x1="3" x2="21" y1="10" y2="10"></line>
         </svg>
       </button>
     </div>
@@ -1474,23 +1590,13 @@ function createBacklogItem(task) {
     }
   });
 
-  // Event: Schedule task (set due to today)
-  const scheduleBtn = item.querySelector(".schedule-btn");
-  scheduleBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const found = findTask(task.id);
-    if (found) {
-      const today = new Date();
-      found.task.dueDate = toLocalDateString(today);
-      saveState();
-      renderBacklog();
-      renderBoard();
-      if (activeView === "today") renderToday();
-    }
-  });
-
   // Event: Click to go to board
   item.addEventListener("click", () => {
+    if (backlogSelectionMode) {
+      toggleBacklogSelection(task.id);
+      item.classList.toggle("is-selected", backlogSelectedIds.has(task.id));
+      return;
+    }
     setActiveView("board");
     setTimeout(() => {
       const cardEl = document.querySelector(`[data-card-id="${task.id}"]`);
@@ -1500,6 +1606,25 @@ function createBacklogItem(task) {
         setTimeout(() => cardEl.classList.remove("highlight"), 1500);
       }
     }, 100);
+  });
+
+  const selectBox = item.querySelector(".backlog-item-select");
+  selectBox.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!backlogSelectionMode) return;
+    toggleBacklogSelection(task.id);
+    item.classList.toggle("is-selected", backlogSelectedIds.has(task.id));
+  });
+
+  const dueInput = item.querySelector(".backlog-item-date");
+  dueInput.addEventListener("change", (e) => {
+    e.stopPropagation();
+    const found = findTask(task.id);
+    if (!found) return;
+    found.task.dueDate = dueInput.value || null;
+    saveState();
+    renderBacklog();
+    renderBoard();
   });
 
   return item;
@@ -2793,6 +2918,103 @@ document.addEventListener("keydown", (event) => {
   renderBoard();
 });
 
+document.addEventListener("keydown", (event) => {
+  if (activeView !== "backlog") return;
+  if (event.target.matches("input, textarea, select")) return;
+  const key = event.key.toLowerCase();
+  if (!backlogSelectionMode && ["x", "a", "t", "n", "w", "s", "d", "delete", "backspace"].includes(key)) {
+    return;
+  }
+  const visibleIds = getVisibleBacklogIds();
+  if (visibleIds.length === 0) return;
+
+  const focusIndex = backlogFocusedId ? visibleIds.indexOf(backlogFocusedId) : -1;
+  const moveFocus = (delta) => {
+    const nextIndex = Math.max(0, Math.min(visibleIds.length - 1, (focusIndex === -1 ? 0 : focusIndex + delta)));
+    setBacklogFocus(visibleIds[nextIndex]);
+  };
+
+  if (event.key === "ArrowDown" || event.key.toLowerCase() === "j") {
+    event.preventDefault();
+    moveFocus(1);
+    return;
+  }
+  if (event.key === "ArrowUp" || event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    moveFocus(-1);
+    return;
+  }
+  if (event.key === "Escape") {
+    clearBacklogSelection();
+    renderBacklog();
+    return;
+  }
+  if (event.key.toLowerCase() === "a") {
+    event.preventDefault();
+    setBacklogSelection(visibleIds);
+    renderBacklog();
+    return;
+  }
+  if (event.key.toLowerCase() === "x") {
+    event.preventDefault();
+    if (backlogFocusedId) {
+      toggleBacklogSelection(backlogFocusedId);
+      renderBacklog();
+    }
+    return;
+  }
+
+  if (!backlogFocusedId) return;
+  if (backlogSelectedIds.size === 0) {
+    backlogSelectedIds.add(backlogFocusedId);
+  }
+
+  if (event.key.toLowerCase() === "t") {
+    event.preventDefault();
+    applyBatchToSelected("today");
+    return;
+  }
+  if (event.key.toLowerCase() === "n") {
+    event.preventDefault();
+    applyBatchToSelected("tomorrow");
+    return;
+  }
+  if (event.key.toLowerCase() === "w") {
+    event.preventDefault();
+    applyBatchToSelected("next-week");
+    return;
+  }
+  if (event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    applyBatchToSelected("start");
+    return;
+  }
+  if (event.key.toLowerCase() === "d") {
+    event.preventDefault();
+    applyBatchToSelected("done");
+    return;
+  }
+  if (event.key === "Backspace" || event.key === "Delete") {
+    event.preventDefault();
+    applyBatchToSelected("archive");
+    return;
+  }
+  if (event.key === "Enter") {
+    event.preventDefault();
+    const found = findTask(backlogFocusedId);
+    if (!found) return;
+    setActiveView("board");
+    setTimeout(() => {
+      const cardEl = document.querySelector(`[data-card-id="${found.task.id}"]`);
+      if (cardEl) {
+        cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        cardEl.classList.add("highlight");
+        setTimeout(() => cardEl.classList.remove("highlight"), 1500);
+      }
+    }, 100);
+  }
+});
+
 // Backlog view mode toggle
 viewModeBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
@@ -2808,6 +3030,39 @@ viewModeBtns.forEach((btn) => {
 if (backlogSearchInput) {
   backlogSearchInput.addEventListener("input", () => {
     backlogSearchQuery = backlogSearchInput.value;
+    renderBacklog();
+  });
+}
+
+if (backlogSelectToggle) {
+  backlogSelectToggle.addEventListener("click", () => {
+    setBacklogSelectionMode(!backlogSelectionMode);
+    backlogSelectToggle.textContent = backlogSelectionMode ? "Done selecting" : "Select";
+    renderBacklog();
+  });
+}
+
+if (backlogBatchToday) {
+  backlogBatchToday.addEventListener("click", () => applyBatchToSelected("today"));
+}
+if (backlogBatchTomorrow) {
+  backlogBatchTomorrow.addEventListener("click", () => applyBatchToSelected("tomorrow"));
+}
+if (backlogBatchNextWeek) {
+  backlogBatchNextWeek.addEventListener("click", () => applyBatchToSelected("next-week"));
+}
+if (backlogBatchStart) {
+  backlogBatchStart.addEventListener("click", () => applyBatchToSelected("start"));
+}
+if (backlogBatchDone) {
+  backlogBatchDone.addEventListener("click", () => applyBatchToSelected("done"));
+}
+if (backlogBatchArchive) {
+  backlogBatchArchive.addEventListener("click", () => applyBatchToSelected("archive"));
+}
+if (backlogBatchClear) {
+  backlogBatchClear.addEventListener("click", () => {
+    clearBacklogSelection();
     renderBacklog();
   });
 }
@@ -2855,6 +3110,8 @@ applyLayers();
 
 function setActiveView(view) {
   activeView = view;
+  settings.lastActiveView = view;
+  saveSettings();
   navLinks.forEach((link) => {
     link.classList.toggle("active", link.dataset.view === activeView);
   });
@@ -2878,6 +3135,10 @@ function setActiveView(view) {
       timelineStartDate = timelineMode === "week" ? getWeekStart(new Date()) : getMonthStart(new Date());
     }
     renderTimeline();
+  }
+  if (activeView !== "backlog" && backlogSelectionMode) {
+    setBacklogSelectionMode(false);
+    if (backlogSelectToggle) backlogSelectToggle.textContent = "Select";
   }
   if (activeView === "archive") {
     renderArchive();
