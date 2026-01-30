@@ -33,6 +33,11 @@ const timelineModeBtns = Array.from(document.querySelectorAll(".timeline-mode-bt
 const timelinePrevBtn = document.getElementById("timeline-prev");
 const timelineNextBtn = document.getElementById("timeline-next");
 const timelineTodayBtn = document.getElementById("timeline-today");
+const archiveList = document.getElementById("archive-list");
+const archiveCountEl = document.getElementById("archive-count");
+const archiveSearchInput = document.getElementById("archive-search-input");
+const archiveFilterBtns = Array.from(document.querySelectorAll(".archive-filter-btn"));
+const archiveClearBtn = document.getElementById("archive-clear");
 
 let boardState = loadState();
 let backlogGroupMode = "schedule"; // "schedule" or "effort"
@@ -44,6 +49,8 @@ let focusIndex = 0;
 let settings = loadSettings();
 let activeView = settings.defaultView || "board";
 let visibleLayers = loadLayers();
+let archiveSearchQuery = "";
+let archiveRange = "all";
 
 function loadSettings() {
   try {
@@ -145,6 +152,13 @@ function formatRelativeTime(dateString) {
   return date.toLocaleDateString();
 }
 
+function formatShortDate(dateValue) {
+  if (!dateValue) return "";
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function toDateInputValue(dateValue) {
   if (!dateValue) return "";
   const date = parseLocalDate(dateValue);
@@ -182,6 +196,16 @@ function parseLocalDate(dateValue) {
   const fallback = new Date(dateValue);
   if (Number.isNaN(fallback.getTime())) return null;
   return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+}
+
+function setTaskStatus(task, nextStatus) {
+  const prevStatus = task.status;
+  task.status = nextStatus;
+  if (nextStatus === "done") {
+    task.completedAt = task.completedAt || new Date().toISOString();
+  } else if (prevStatus === "done") {
+    task.completedAt = null;
+  }
 }
 
 function findTask(cardId) {
@@ -1227,7 +1251,7 @@ function createBacklogItem(task) {
     e.stopPropagation();
     const found = findTask(task.id);
     if (found) {
-      found.task.status = "done";
+      setTaskStatus(found.task, "done");
       saveState();
       renderBacklog();
       renderBoard();
@@ -1241,7 +1265,7 @@ function createBacklogItem(task) {
     e.stopPropagation();
     const found = findTask(task.id);
     if (found) {
-      found.task.status = "doing";
+      setTaskStatus(found.task, "doing");
       saveState();
       renderBacklog();
       renderBoard();
@@ -1400,6 +1424,11 @@ function getTaskDayIndex(task, days) {
 function renderTimeline() {
   if (!timelineGrid) return;
 
+  timelineGrid.dataset.mode = timelineMode;
+  timelineGrid.classList.remove("is-animating");
+  void timelineGrid.offsetHeight;
+  timelineGrid.classList.add("is-animating");
+
   const days = getTimelineDays();
   const scheduledTasks = getTasksForTimeline();
   const unscheduledTasks = getUnscheduledTasks();
@@ -1451,6 +1480,14 @@ function renderTimeline() {
   rowsContainer.className = "timeline-rows";
 
   if (timelineMode === "week") {
+    const todayIndex = days.findIndex((day) => day.isToday);
+    if (todayIndex !== -1) {
+      const todayLine = document.createElement("div");
+      todayLine.className = "timeline-today-line";
+      todayLine.style.left = `calc(${((todayIndex + 0.5) * (100 / numDays))}% - 1px)`;
+      rowsContainer.appendChild(todayLine);
+    }
+
     // Week view: each task gets its own row
     const tasksInView = scheduledTasks.filter(task => {
       const idx = getTaskDayIndex(task, days);
@@ -1485,10 +1522,11 @@ function renderTimeline() {
       `;
       rowsContainer.appendChild(emptyState);
     } else {
-      tasksInView.forEach(task => {
+      tasksInView.forEach((task, rowIndex) => {
         const row = document.createElement("div");
         row.className = "timeline-row";
         row.style.gridTemplateColumns = gridCols;
+        row.style.setProperty("--row-delay", `${rowIndex * 40}ms`);
 
         // Create cells for each day
         days.forEach((day) => {
@@ -1590,6 +1628,7 @@ function renderTimeline() {
       const row = document.createElement("div");
       row.className = "timeline-row";
       row.style.gridTemplateColumns = gridCols;
+      row.style.setProperty("--row-delay", `${week * 60}ms`);
 
       weekDays.forEach((day) => {
         const cell = document.createElement("div");
@@ -1759,6 +1798,138 @@ function goToTimelineToday() {
   renderTimeline();
 }
 
+// ==================== ARCHIVE VIEW ====================
+
+function getArchiveTasks() {
+  return boardState.tasks.filter(task => task.status === "done");
+}
+
+function getCompletionDate(task) {
+  if (task.completedAt) {
+    const date = new Date(task.completedAt);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+  if (task.createdAt) {
+    const date = new Date(task.createdAt);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+  return null;
+}
+
+function renderArchive() {
+  if (!archiveList) return;
+  archiveList.innerHTML = "";
+
+  const allArchived = getArchiveTasks();
+  const now = new Date();
+  const rangeDays = archiveRange === "all" ? null : Number(archiveRange);
+
+  const searchTerm = archiveSearchQuery.toLowerCase().trim();
+  const filtered = allArchived.filter(task => {
+    if (searchTerm) {
+      const haystack = `${task.title} ${task.description || ""}`.toLowerCase();
+      if (!haystack.includes(searchTerm)) return false;
+    }
+    if (rangeDays) {
+      const completion = getCompletionDate(task);
+      if (!completion) return false;
+      const diffDays = Math.floor((now - completion) / 86400000);
+      if (diffDays > rangeDays) return false;
+    }
+    return true;
+  });
+
+  filtered.sort((a, b) => {
+    const aDate = getCompletionDate(a);
+    const bDate = getCompletionDate(b);
+    if (!aDate && !bDate) return 0;
+    if (!aDate) return 1;
+    if (!bDate) return -1;
+    return bDate - aDate;
+  });
+
+  if (archiveCountEl) {
+    archiveCountEl.textContent = `${filtered.length} item${filtered.length !== 1 ? "s" : ""}`;
+  }
+
+  if (filtered.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "archive-empty";
+    empty.innerHTML = `
+      <div class="archive-empty-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect width="18" height="14" x="3" y="5" rx="2"></rect>
+          <path d="M7 5V3h10v2"></path>
+          <path d="M9 12h6"></path>
+        </svg>
+      </div>
+      <h3>No archived tasks yet</h3>
+      <p>Completed tasks will appear here with restore and delete actions.</p>
+    `;
+    archiveList.appendChild(empty);
+    return;
+  }
+
+  filtered.forEach(task => {
+    const completion = getCompletionDate(task);
+    const completionText = completion ? formatRelativeTime(completion.toISOString()) : "Completed";
+    const completionDate = completion ? formatShortDate(completion) : "";
+    const dueDate = task.dueDate ? formatShortDate(parseLocalDate(task.dueDate)) : "";
+
+    const item = document.createElement("div");
+    item.className = "archive-item";
+    item.innerHTML = `
+      <div class="archive-item-main">
+        <div class="archive-item-title">${escapeHtml(task.title)}</div>
+        <div class="archive-item-meta">
+          <span class="archive-meta-chip">${completionText}</span>
+          ${completionDate ? `<span class="archive-meta-chip subtle">Completed ${completionDate}</span>` : ""}
+          ${dueDate ? `<span class="archive-meta-chip subtle">Due ${dueDate}</span>` : ""}
+        </div>
+      </div>
+      <div class="archive-item-actions">
+        <button class="icon-button archive-restore-btn" title="Restore task">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 14 4 9 9 4"></polyline>
+            <path d="M20 20a8 8 0 0 0-8-8H4"></path>
+          </svg>
+        </button>
+        <button class="icon-button archive-delete-btn" title="Delete task">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+          </svg>
+        </button>
+      </div>
+    `;
+
+    const restoreBtn = item.querySelector(".archive-restore-btn");
+    restoreBtn.addEventListener("click", () => {
+      const found = findTask(task.id);
+      if (!found) return;
+      setTaskStatus(found.task, "todo");
+      saveState();
+      renderArchive();
+      renderBoard();
+      renderBacklog();
+      renderToday();
+      renderTimeline();
+    });
+
+    const deleteBtn = item.querySelector(".archive-delete-btn");
+    deleteBtn.addEventListener("click", () => {
+      if (!confirm("Delete this task permanently?")) return;
+      deleteCard(task.id);
+      renderArchive();
+    });
+
+    archiveList.appendChild(item);
+  });
+}
+
 // Timeline event handlers
 if (timelinePrevBtn) {
   timelinePrevBtn.addEventListener("click", () => navigateTimeline("prev"));
@@ -1861,6 +2032,7 @@ function addCard(title) {
     effort: effortInput.value || null,
     dueDate: dueDateInput.value ? dueDateInput.value : null,
     createdAt: new Date().toISOString(),
+    completedAt: null,
     description: "",
     expanded: false,
     // Weight fields for priority scoring
@@ -1877,7 +2049,7 @@ function addCard(title) {
 function moveCard(cardId, targetColumn) {
   const found = findTask(cardId);
   if (!found) return;
-  found.task.status = targetColumn;
+  setTaskStatus(found.task, targetColumn);
   saveState();
   renderBoard();
 }
@@ -1970,6 +2142,36 @@ if (backlogSearchInput) {
   });
 }
 
+if (archiveSearchInput) {
+  archiveSearchInput.addEventListener("input", () => {
+    archiveSearchQuery = archiveSearchInput.value;
+    renderArchive();
+  });
+}
+
+archiveFilterBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const range = btn.dataset.range || "all";
+    if (range === archiveRange) return;
+    archiveRange = range;
+    archiveFilterBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.range === range));
+    renderArchive();
+  });
+});
+
+if (archiveClearBtn) {
+  archiveClearBtn.addEventListener("click", () => {
+    if (!confirm("Clear all archived tasks? This cannot be undone.")) return;
+    boardState.tasks = boardState.tasks.filter((task) => task.status !== "done");
+    saveState();
+    renderArchive();
+    renderBoard();
+    renderBacklog();
+    renderToday();
+    renderTimeline();
+  });
+}
+
 renderBoard();
 renderToday();
 renderBacklog();
@@ -1996,6 +2198,9 @@ function setActiveView(view) {
   }
   if (activeView === "timeline") {
     renderTimeline();
+  }
+  if (activeView === "archive") {
+    renderArchive();
   }
   if (activeView === "settings" && defaultViewSelect) {
     defaultViewSelect.value = settings.defaultView || "board";

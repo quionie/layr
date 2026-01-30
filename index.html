@@ -171,7 +171,13 @@
                   </div>
                 </div>
               </div>
-              <div class="timeline-date-range" id="timeline-date-range"></div>
+              <div class="timeline-date-row">
+                <div class="timeline-date-range" id="timeline-date-range"></div>
+                <div class="timeline-help" aria-hidden="true">
+                  <span class="timeline-help-chip">Drag to reschedule</span>
+                  <span class="timeline-help-chip">Drop below to unschedule</span>
+                </div>
+              </div>
             </div>
             <div class="timeline-grid-wrapper">
               <div class="timeline-grid" id="timeline-grid"></div>
@@ -190,6 +196,38 @@
           </div>
         </section>
 
+        <section class="archive-view view" data-view-panel="archive" aria-label="Archive">
+          <div class="archive-container">
+            <div class="archive-header">
+              <div class="archive-title-row">
+                <div>
+                  <h2>Archive</h2>
+                  <p>Completed work, organized and searchable.</p>
+                </div>
+                <div class="archive-actions">
+                  <button class="btn ghost archive-clear-btn" id="archive-clear" type="button">Clear archive</button>
+                </div>
+              </div>
+              <div class="archive-toolbar">
+                <div class="archive-search">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.3-4.3"></path>
+                  </svg>
+                  <input type="text" id="archive-search-input" placeholder="Search archived tasks..." />
+                </div>
+                <div class="archive-filters" role="group" aria-label="Archive range">
+                  <button class="archive-filter-btn is-active" type="button" data-range="all">All time</button>
+                  <button class="archive-filter-btn" type="button" data-range="7">Last 7 days</button>
+                  <button class="archive-filter-btn" type="button" data-range="30">Last 30 days</button>
+                </div>
+                <div class="archive-count" id="archive-count">0 items</div>
+              </div>
+            </div>
+            <div class="archive-list" id="archive-list"></div>
+          </div>
+        </section>
+
         <section class="settings-view view" data-view-panel="settings" aria-label="Settings">
           <div class="settings-container">
             <div class="settings-header">
@@ -202,6 +240,9 @@
               <select id="default-view">
                 <option value="board">Board</option>
                 <option value="today">Today</option>
+                <option value="timeline">Timeline</option>
+                <option value="backlog">Backlog</option>
+                <option value="archive">Archive</option>
               </select>
             </div>
           </div>
