@@ -209,6 +209,20 @@
                   <span class="timeline-help-chip">Drop below to unschedule</span>
                 </div>
               </div>
+              <div class="timeline-toolbar">
+                <div class="timeline-filters" role="group" aria-label="Timeline filters">
+                  <button class="timeline-filter-btn is-active" type="button" data-filter="all">All tasks</button>
+                  <button class="timeline-filter-btn" type="button" data-filter="doing">Doing only</button>
+                </div>
+                <label class="timeline-toggle">
+                  <input type="checkbox" id="timeline-hide-empty" />
+                  <span>Hide empty weeks</span>
+                </label>
+                <label class="timeline-toggle">
+                  <input type="checkbox" id="timeline-show-workload" checked />
+                  <span>Show workload</span>
+                </label>
+              </div>
             </div>
             <div class="timeline-grid-wrapper">
               <div class="timeline-grid" id="timeline-grid"></div>
@@ -222,8 +236,16 @@
                 <span>Unscheduled</span>
                 <span class="timeline-unscheduled-count" id="timeline-unscheduled-count">0</span>
               </div>
+              <div class="timeline-unscheduled-toolbar">
+                <div class="timeline-quick-add">
+                  <input type="text" id="timeline-quick-title" placeholder="Quick add task..." />
+                  <input type="date" id="timeline-quick-date" />
+                  <button class="btn" id="timeline-quick-add" type="button">Add</button>
+                </div>
+              </div>
               <div class="timeline-unscheduled-list" id="timeline-unscheduled-list"></div>
             </div>
+            <div class="timeline-drag-tooltip" id="timeline-drag-tooltip"></div>
           </div>
         </section>
 

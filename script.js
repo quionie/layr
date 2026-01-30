@@ -54,6 +54,13 @@ const timelineModeBtns = Array.from(document.querySelectorAll(".timeline-mode-bt
 const timelinePrevBtn = document.getElementById("timeline-prev");
 const timelineNextBtn = document.getElementById("timeline-next");
 const timelineTodayBtn = document.getElementById("timeline-today");
+const timelineFilterBtns = Array.from(document.querySelectorAll(".timeline-filter-btn"));
+const timelineHideEmptyToggle = document.getElementById("timeline-hide-empty");
+const timelineShowWorkloadToggle = document.getElementById("timeline-show-workload");
+const timelineQuickTitle = document.getElementById("timeline-quick-title");
+const timelineQuickDate = document.getElementById("timeline-quick-date");
+const timelineQuickAddBtn = document.getElementById("timeline-quick-add");
+const timelineDragTooltip = document.getElementById("timeline-drag-tooltip");
 const archiveList = document.getElementById("archive-list");
 const archiveCountEl = document.getElementById("archive-count");
 const archiveSearchInput = document.getElementById("archive-search-input");
@@ -73,6 +80,13 @@ let visibleLayers = loadLayers();
 let archiveSearchQuery = "";
 let archiveRange = "all";
 let suppressTopPick = false;
+let selectedTimelineTaskId = null;
+let timelineFilter = "all";
+let timelineHideEmptyWeeks = false;
+let timelineShowWorkload = true;
+
+if (timelineHideEmptyToggle) timelineHideEmptyWeeks = timelineHideEmptyToggle.checked;
+if (timelineShowWorkloadToggle) timelineShowWorkload = timelineShowWorkloadToggle.checked;
 
 backlogGroupMode = settings.defaultBacklogGroup || backlogGroupMode;
 timelineMode = settings.defaultTimelineMode || timelineMode;
@@ -285,6 +299,52 @@ function parseLocalDate(dateValue) {
   const fallback = new Date(dateValue);
   if (Number.isNaN(fallback.getTime())) return null;
   return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+}
+
+function getTaskDurationDays(task) {
+  const duration = Number(task.durationDays || 1);
+  return Number.isFinite(duration) && duration > 0 ? Math.round(duration) : 1;
+}
+
+function getTaskStartDate(task) {
+  if (!task.dueDate) return null;
+  const endDate = parseLocalDate(task.dueDate);
+  if (!endDate) return null;
+  const duration = getTaskDurationDays(task);
+  const startDate = addDays(endDate, -(duration - 1));
+  return startDate;
+}
+
+function setSelectedTimelineTask(taskId) {
+  selectedTimelineTaskId = taskId;
+  document.querySelectorAll(".timeline-task-bar.is-selected, .timeline-milestone.is-selected, .timeline-unscheduled-item.is-selected")
+    .forEach((el) => el.classList.remove("is-selected"));
+  if (!taskId) return;
+  document.querySelectorAll(`[data-task-id="${taskId}"]`).forEach((el) => {
+    el.classList.add("is-selected");
+  });
+}
+
+function updateTimelineTooltip(text, x, y, show) {
+  if (!timelineDragTooltip) return;
+  if (!show) {
+    timelineDragTooltip.classList.remove("is-visible");
+    return;
+  }
+  timelineDragTooltip.textContent = text;
+  timelineDragTooltip.style.left = `${x + 12}px`;
+  timelineDragTooltip.style.top = `${y + 12}px`;
+  timelineDragTooltip.classList.add("is-visible");
+}
+
+function clearTimelinePreview() {
+  document.querySelectorAll(".timeline-cell.is-preview").forEach((cell) => cell.classList.remove("is-preview"));
+  document.querySelectorAll(".timeline-row.is-drop-row").forEach((row) => row.classList.remove("is-drop-row"));
+}
+
+function isDateInRange(date, start, end) {
+  if (!date || !start || !end) return false;
+  return date >= start && date <= end;
 }
 
 function setTaskStatus(task, nextStatus) {
@@ -1571,9 +1631,28 @@ function renderTimeline() {
   timelineGrid.classList.add("is-animating");
 
   const days = getTimelineDays();
-  const scheduledTasks = getTasksForTimeline();
-  const unscheduledTasks = getUnscheduledTasks();
+  const scheduledTasksRaw = getTasksForTimeline();
+  const unscheduledTasksRaw = getUnscheduledTasks();
+  const scheduledTasks = timelineFilter === "doing"
+    ? scheduledTasksRaw.filter((task) => task.status === "doing")
+    : scheduledTasksRaw;
+  const unscheduledTasks = timelineFilter === "doing"
+    ? unscheduledTasksRaw.filter((task) => task.status === "doing")
+    : unscheduledTasksRaw;
   const numDays = days.length;
+  const workloadCounts = days.map(() => 0);
+  const overloadThreshold = 3;
+
+  scheduledTasks.forEach((task) => {
+    const start = getTaskStartDate(task);
+    const end = parseLocalDate(task.dueDate);
+    if (!start || !end) return;
+    days.forEach((day, index) => {
+      if (isDateInRange(day.date, start, end)) {
+        workloadCounts[index] += 1;
+      }
+    });
+  });
 
   // Update date range display
   if (timelineDateRange) {
@@ -1602,10 +1681,13 @@ function renderTimeline() {
   const displayDays = timelineMode === "week" ? days : days.slice(0, 7);
 
   displayDays.forEach(day => {
+    const dayIndex = days.findIndex((d) => isSameDay(d.date, day.date));
+    const isOverloaded = dayIndex !== -1 && workloadCounts[dayIndex] >= overloadThreshold;
     const col = document.createElement("div");
     col.className = "timeline-day-col";
     if (day.isToday) col.classList.add("is-today");
     if (day.isWeekend) col.classList.add("is-weekend");
+    if (isOverloaded) col.classList.add("is-overloaded");
 
     col.innerHTML = `
       <span class="timeline-day-name">${day.dayName}</span>
@@ -1615,6 +1697,24 @@ function renderTimeline() {
   });
 
   timelineGrid.appendChild(daysHeader);
+
+  if (timelineShowWorkload && timelineMode === "week") {
+    const workloadRow = document.createElement("div");
+    workloadRow.className = "timeline-workload";
+    workloadRow.style.gridTemplateColumns = gridCols;
+    const maxCount = Math.max(1, ...workloadCounts);
+    days.forEach((day, index) => {
+      const cell = document.createElement("div");
+      cell.className = "timeline-workload-cell";
+      if (workloadCounts[index] >= overloadThreshold) cell.classList.add("is-overloaded");
+      cell.innerHTML = `
+        <div>${workloadCounts[index]}</div>
+        <div class="timeline-workload-bar"><span style="width:${Math.round((workloadCounts[index] / maxCount) * 100)}%"></span></div>
+      `;
+      workloadRow.appendChild(cell);
+    });
+    timelineGrid.appendChild(workloadRow);
+  }
 
   // Create rows container
   const rowsContainer = document.createElement("div");
@@ -1670,24 +1770,48 @@ function renderTimeline() {
         row.style.setProperty("--row-delay", `${rowIndex * 40}ms`);
 
         // Create cells for each day
-        days.forEach((day) => {
+        days.forEach((day, dayIndex) => {
           const cell = document.createElement("div");
           cell.className = "timeline-cell";
           if (day.isToday) cell.classList.add("is-today");
           if (day.isWeekend) cell.classList.add("is-weekend");
+          if (workloadCounts[dayIndex] >= overloadThreshold) cell.classList.add("is-overloaded");
           cell.dataset.date = toLocalDateString(day.date);
+          cell.dataset.index = String(dayIndex);
 
           // Add drop zone behavior
           cell.addEventListener("dragover", (e) => {
             e.preventDefault();
             cell.classList.add("drop-target");
+            row.classList.add("is-drop-row");
+            const taskId = e.dataTransfer.getData("text/plain");
+            if (taskId) {
+              const found = findTask(taskId);
+              if (found) {
+                clearTimelinePreview();
+                const duration = getTaskDurationDays(found.task);
+                const endIndex = dayIndex;
+                const startIndex = Math.max(0, endIndex - duration + 1);
+                const rowCells = Array.from(row.querySelectorAll(".timeline-cell"));
+                for (let i = startIndex; i <= endIndex; i++) {
+                  if (rowCells[i]) rowCells[i].classList.add("is-preview");
+                }
+              }
+            }
+            updateTimelineTooltip(formatShortDate(day.date), e.clientX, e.clientY, true);
           });
           cell.addEventListener("dragleave", () => {
             cell.classList.remove("drop-target");
+            clearTimelinePreview();
+            row.classList.remove("is-drop-row");
+            updateTimelineTooltip("", 0, 0, false);
           });
           cell.addEventListener("drop", (e) => {
             e.preventDefault();
             cell.classList.remove("drop-target");
+            clearTimelinePreview();
+            row.classList.remove("is-drop-row");
+            updateTimelineTooltip("", 0, 0, false);
             const taskId = e.dataTransfer.getData("text/plain");
             if (taskId) {
               const found = findTask(taskId);
@@ -1698,6 +1822,15 @@ function renderTimeline() {
                 renderBoard();
               }
             }
+          });
+          cell.addEventListener("click", () => {
+            if (!selectedTimelineTaskId) return;
+            const found = findTask(selectedTimelineTaskId);
+            if (!found) return;
+            found.task.dueDate = cell.dataset.date;
+            saveState();
+            renderTimeline();
+            renderBoard();
           });
 
           row.appendChild(cell);
@@ -1715,16 +1848,28 @@ function renderTimeline() {
           if (isOverdue(task.dueDate) && task.status !== "done") {
             taskBar.classList.add("is-overdue");
           }
+          if (task.id === selectedTimelineTaskId) {
+            taskBar.classList.add("is-selected");
+          }
 
           // Position the bar
           const cellWidth = 100 / numDays;
-          taskBar.style.left = `calc(${taskDayIndex * cellWidth}% + 4px)`;
-          taskBar.style.width = `calc(${cellWidth}% - 8px)`;
+          const duration = getTaskDurationDays(task);
+          const startIndex = Math.max(0, taskDayIndex - duration + 1);
+          const visibleStart = Math.max(0, startIndex);
+          const visibleEnd = Math.min(numDays - 1, taskDayIndex);
+          const visibleDuration = Math.max(1, visibleEnd - visibleStart + 1);
+          taskBar.style.left = `calc(${visibleStart * cellWidth}% + 4px)`;
+          taskBar.style.width = `calc(${visibleDuration * cellWidth}% - 8px)`;
 
           taskBar.innerHTML = `<span class="timeline-task-title">${escapeHtml(task.title)}</span>`;
+          const resizeHandle = document.createElement("div");
+          resizeHandle.className = "timeline-resize-handle";
+          taskBar.appendChild(resizeHandle);
 
           // Drag to reschedule
           taskBar.addEventListener("dragstart", (e) => {
+            setSelectedTimelineTask(task.id);
             e.dataTransfer.setData("text/plain", task.id);
             e.dataTransfer.effectAllowed = "move";
             // Use setTimeout to add classes after drag image is captured
@@ -1739,21 +1884,56 @@ function renderTimeline() {
             document.body.classList.remove("is-dragging-timeline");
             // Clear all drop targets
             document.querySelectorAll(".drop-target").forEach(el => el.classList.remove("drop-target"));
+            clearTimelinePreview();
+            updateTimelineTooltip("", 0, 0, false);
+          });
+
+          resizeHandle.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const rowRect = row.getBoundingClientRect();
+            const start = getTaskStartDate(task);
+            if (!start) return;
+            const startIndexForResize = Math.max(0, Math.min(numDays - 1, Math.floor((start - days[0].date) / 86400000)));
+            const handleMove = (ev) => {
+              const x = ev.clientX - rowRect.left;
+              let endIndex = Math.floor((x / rowRect.width) * numDays);
+              endIndex = Math.max(startIndexForResize, Math.min(numDays - 1, endIndex));
+              const newDuration = endIndex - startIndexForResize + 1;
+              task.durationDays = newDuration;
+              task.dueDate = toLocalDateString(days[endIndex].date);
+              taskBar.style.left = `calc(${startIndexForResize * cellWidth}% + 4px)`;
+              taskBar.style.width = `calc(${newDuration * cellWidth}% - 8px)`;
+              updateTimelineTooltip(formatShortDate(days[endIndex].date), ev.clientX, ev.clientY, true);
+            };
+            const handleUp = () => {
+              document.removeEventListener("mousemove", handleMove);
+              document.removeEventListener("mouseup", handleUp);
+              updateTimelineTooltip("", 0, 0, false);
+              saveState();
+              renderTimeline();
+              renderBoard();
+            };
+            document.addEventListener("mousemove", handleMove);
+            document.addEventListener("mouseup", handleUp);
           });
 
           // Click to navigate to board
           taskBar.addEventListener("click", (e) => {
-            // Don't navigate if we just finished dragging
             if (e.defaultPrevented) return;
-            setActiveView("board");
-            setTimeout(() => {
-              const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
-              if (cardEl) {
-                cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
-                cardEl.classList.add("highlight");
-                setTimeout(() => cardEl.classList.remove("highlight"), 1500);
-              }
-            }, 100);
+            if (e.detail === 2) {
+              setActiveView("board");
+              setTimeout(() => {
+                const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
+                if (cardEl) {
+                  cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                  cardEl.classList.add("highlight");
+                  setTimeout(() => cardEl.classList.remove("highlight"), 1500);
+                }
+              }, 100);
+              return;
+            }
+            setSelectedTimelineTask(task.id);
           });
 
           row.appendChild(taskBar);
@@ -1766,17 +1946,29 @@ function renderTimeline() {
     // Month view: show 4 weeks
     for (let week = 0; week < 4; week++) {
       const weekDays = days.slice(week * 7, (week + 1) * 7);
+      const weekHasTasks = weekDays.some((day) =>
+        scheduledTasks.some((task) => {
+          const start = getTaskStartDate(task);
+          const end = parseLocalDate(task.dueDate);
+          if (!start || !end) return false;
+          return isDateInRange(day.date, start, end);
+        })
+      );
+      if (timelineHideEmptyWeeks && !weekHasTasks) continue;
       const row = document.createElement("div");
       row.className = "timeline-row";
       row.style.gridTemplateColumns = gridCols;
       row.style.setProperty("--row-delay", `${week * 60}ms`);
 
-      weekDays.forEach((day) => {
+      weekDays.forEach((day, dayOffset) => {
         const cell = document.createElement("div");
         cell.className = "timeline-cell";
         if (day.isToday) cell.classList.add("is-today");
         if (day.isWeekend) cell.classList.add("is-weekend");
+        const dayIndex = week * 7 + dayOffset;
+        if (workloadCounts[dayIndex] >= overloadThreshold) cell.classList.add("is-overloaded");
         cell.dataset.date = toLocalDateString(day.date);
+        cell.dataset.index = String(dayIndex);
 
         // Show day number in month view
         const dayLabel = document.createElement("span");
@@ -1788,13 +1980,19 @@ function renderTimeline() {
         cell.addEventListener("dragover", (e) => {
           e.preventDefault();
           cell.classList.add("drop-target");
+          row.classList.add("is-drop-row");
+          updateTimelineTooltip(formatShortDate(day.date), e.clientX, e.clientY, true);
         });
         cell.addEventListener("dragleave", () => {
           cell.classList.remove("drop-target");
+          row.classList.remove("is-drop-row");
+          updateTimelineTooltip("", 0, 0, false);
         });
         cell.addEventListener("drop", (e) => {
           e.preventDefault();
           cell.classList.remove("drop-target");
+          row.classList.remove("is-drop-row");
+          updateTimelineTooltip("", 0, 0, false);
           const taskId = e.dataTransfer.getData("text/plain");
           if (taskId) {
             const found = findTask(taskId);
@@ -1806,12 +2004,22 @@ function renderTimeline() {
             }
           }
         });
+        cell.addEventListener("click", () => {
+          if (!selectedTimelineTaskId) return;
+          const found = findTask(selectedTimelineTaskId);
+          if (!found) return;
+          found.task.dueDate = cell.dataset.date;
+          saveState();
+          renderTimeline();
+          renderBoard();
+        });
 
         // Find tasks for this day
         const dayTasks = scheduledTasks.filter(t => {
-          const tDate = parseLocalDate(t.dueDate);
-          if (!tDate) return false;
-          return isSameDay(tDate, day.date);
+          const start = getTaskStartDate(t);
+          const end = parseLocalDate(t.dueDate);
+          if (!start || !end) return false;
+          return isDateInRange(day.date, start, end);
         });
 
         dayTasks.forEach(task => {
@@ -1826,9 +2034,11 @@ function renderTimeline() {
           }
           dot.title = task.title;
           dot.style.left = "50%";
+          if (task.id === selectedTimelineTaskId) dot.classList.add("is-selected");
 
           // Drag to reschedule
           dot.addEventListener("dragstart", (e) => {
+            setSelectedTimelineTask(task.id);
             e.dataTransfer.setData("text/plain", task.id);
             e.dataTransfer.effectAllowed = "move";
             setTimeout(() => {
@@ -1841,19 +2051,24 @@ function renderTimeline() {
             dot.classList.remove("dragging");
             document.body.classList.remove("is-dragging-timeline");
             document.querySelectorAll(".drop-target").forEach(el => el.classList.remove("drop-target"));
+            updateTimelineTooltip("", 0, 0, false);
           });
 
           dot.addEventListener("click", (e) => {
             if (e.defaultPrevented) return;
-            setActiveView("board");
-            setTimeout(() => {
-              const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
-              if (cardEl) {
-                cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
-                cardEl.classList.add("highlight");
-                setTimeout(() => cardEl.classList.remove("highlight"), 1500);
-              }
-            }, 100);
+            if (e.detail === 2) {
+              setActiveView("board");
+              setTimeout(() => {
+                const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
+                if (cardEl) {
+                  cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                  cardEl.classList.add("highlight");
+                  setTimeout(() => cardEl.classList.remove("highlight"), 1500);
+                }
+              }, 100);
+              return;
+            }
+            setSelectedTimelineTask(task.id);
           });
           cell.appendChild(dot);
         });
@@ -1889,8 +2104,12 @@ function renderTimelineUnscheduled(tasks) {
     item.draggable = true;
     item.textContent = task.title;
     item.dataset.taskId = task.id;
+    if (task.id === selectedTimelineTaskId) {
+      item.classList.add("is-selected");
+    }
 
     item.addEventListener("dragstart", (e) => {
+      setSelectedTimelineTask(task.id);
       e.dataTransfer.setData("text/plain", task.id);
       e.dataTransfer.effectAllowed = "move";
       setTimeout(() => {
@@ -1905,17 +2124,20 @@ function renderTimelineUnscheduled(tasks) {
       document.querySelectorAll(".drop-target").forEach(el => el.classList.remove("drop-target"));
     });
 
-    // Click to go to board
-    item.addEventListener("click", () => {
-      setActiveView("board");
-      setTimeout(() => {
-        const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
-        if (cardEl) {
-          cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
-          cardEl.classList.add("highlight");
-          setTimeout(() => cardEl.classList.remove("highlight"), 1500);
-        }
-      }, 100);
+    item.addEventListener("click", (e) => {
+      if (e.detail === 2) {
+        setActiveView("board");
+        setTimeout(() => {
+          const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
+          if (cardEl) {
+            cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+            cardEl.classList.add("highlight");
+            setTimeout(() => cardEl.classList.remove("highlight"), 1500);
+          }
+        }, 100);
+        return;
+      }
+      setSelectedTimelineTask(task.id);
     });
 
     timelineUnscheduledList.appendChild(item);
@@ -2099,17 +2321,21 @@ if (timelineUnscheduledList) {
   timelineUnscheduledList.addEventListener("dragover", (e) => {
     e.preventDefault();
     timelineUnscheduledList.classList.add("drop-target");
+    updateTimelineTooltip("Unscheduled", e.clientX, e.clientY, true);
   });
 
   timelineUnscheduledList.addEventListener("dragleave", (e) => {
     if (!timelineUnscheduledList.contains(e.relatedTarget)) {
       timelineUnscheduledList.classList.remove("drop-target");
+      updateTimelineTooltip("", 0, 0, false);
     }
   });
 
   timelineUnscheduledList.addEventListener("drop", (e) => {
     e.preventDefault();
     timelineUnscheduledList.classList.remove("drop-target");
+    clearTimelinePreview();
+    updateTimelineTooltip("", 0, 0, false);
     const taskId = e.dataTransfer.getData("text/plain");
     if (taskId) {
       const found = findTask(taskId);
@@ -2137,6 +2363,71 @@ timelineModeBtns.forEach(btn => {
     renderTimeline();
   });
 });
+
+timelineFilterBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const nextFilter = btn.dataset.filter || "all";
+    if (nextFilter === timelineFilter) return;
+    timelineFilter = nextFilter;
+    timelineFilterBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.filter === timelineFilter));
+    renderTimeline();
+  });
+});
+
+if (timelineHideEmptyToggle) {
+  timelineHideEmptyToggle.addEventListener("change", () => {
+    timelineHideEmptyWeeks = timelineHideEmptyToggle.checked;
+    renderTimeline();
+  });
+}
+
+if (timelineShowWorkloadToggle) {
+  timelineShowWorkloadToggle.addEventListener("change", () => {
+    timelineShowWorkload = timelineShowWorkloadToggle.checked;
+    renderTimeline();
+  });
+}
+
+if (timelineQuickAddBtn) {
+  timelineQuickAddBtn.addEventListener("click", () => {
+    const title = timelineQuickTitle?.value.trim();
+    if (!title) return;
+    const due = timelineQuickDate?.value || getDefaultDueDateValue() || null;
+    const card = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title,
+      status: "todo",
+      effort: null,
+      dueDate: due || null,
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+      archivedAt: null,
+      durationDays: 1,
+      description: "",
+      expanded: false,
+      impact: null,
+      urgency: null,
+      blockedBy: null,
+    };
+    boardState.tasks.push(card);
+    saveState();
+    if (timelineQuickTitle) timelineQuickTitle.value = "";
+    if (timelineQuickDate) timelineQuickDate.value = "";
+    renderTimeline();
+    renderBoard();
+    renderBacklog();
+    updateStats();
+  });
+}
+
+if (timelineQuickTitle) {
+  timelineQuickTitle.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      timelineQuickAddBtn?.click();
+    }
+  });
+}
 
 function setFocusColumn(index) {
   focusIndex = Math.max(0, Math.min(index, columns.length - 1));
@@ -2185,6 +2476,7 @@ function addCard(title) {
     createdAt: new Date().toISOString(),
     completedAt: null,
     archivedAt: null,
+    durationDays: 1,
     description: "",
     expanded: false,
     // Weight fields for priority scoring
@@ -2466,6 +2758,39 @@ document.addEventListener("keydown", (event) => {
   if (!focusMode) return;
   if (event.target.matches("input, textarea")) return;
   if (event.key === "Escape") toggleFocusMode(false);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (activeView !== "timeline") return;
+  if (event.target.matches("input, textarea, select")) return;
+  if (event.key === "Escape") {
+    setSelectedTimelineTask(null);
+    return;
+  }
+  if (!selectedTimelineTaskId) return;
+  const found = findTask(selectedTimelineTaskId);
+  if (!found) return;
+  if (event.key.toLowerCase() === "t") {
+    found.task.dueDate = toLocalDateString(new Date());
+    saveState();
+    renderTimeline();
+    renderBoard();
+    return;
+  }
+  let delta = 0;
+  if (event.key === "ArrowLeft") delta = -1;
+  if (event.key === "ArrowRight") delta = 1;
+  if (event.key === "ArrowUp") delta = -7;
+  if (event.key === "ArrowDown") delta = 7;
+  if (delta === 0) return;
+  if (event.shiftKey && Math.abs(delta) === 1) delta *= 7;
+  const baseDate = found.task.dueDate ? parseLocalDate(found.task.dueDate) : new Date();
+  if (!baseDate) return;
+  const nextDate = addDays(baseDate, delta);
+  found.task.dueDate = toLocalDateString(nextDate);
+  saveState();
+  renderTimeline();
+  renderBoard();
 });
 
 // Backlog view mode toggle
