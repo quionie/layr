@@ -89,8 +89,39 @@
         <section class="today-view view" data-view-panel="today" aria-label="Today list">
           <div class="today-container">
             <div class="today-header">
-              <h2>Today</h2>
-              <p>Tasks due today and currently in progress</p>
+              <div class="today-title-row">
+                <div>
+                  <h2 id="today-title">Today</h2>
+                  <p>Focus on what is urgent, what is moving, and what is next.</p>
+                </div>
+              </div>
+              <div class="today-summary-row">
+                <div class="today-summary-card">
+                  <div class="today-summary-title">At a glance</div>
+                  <div class="today-summary-metrics">
+                    <div class="today-metric">
+                      <span class="today-metric-value" id="today-count-overdue">0</span>
+                      <span class="today-metric-label">Overdue</span>
+                    </div>
+                    <div class="today-metric">
+                      <span class="today-metric-value" id="today-count-due">0</span>
+                      <span class="today-metric-label">Due today</span>
+                    </div>
+                    <div class="today-metric">
+                      <span class="today-metric-value" id="today-count-doing">0</span>
+                      <span class="today-metric-label">In progress</span>
+                    </div>
+                    <div class="today-metric">
+                      <span class="today-metric-value" id="today-count-total">0</span>
+                      <span class="today-metric-label">Total</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="today-pulse-card">
+                  <div class="today-pulse-title">Today&#39;s pulse</div>
+                  <div class="today-pulse-message" id="today-pulse">All clear.</div>
+                </div>
+              </div>
             </div>
             <div id="today-content"></div>
           </div>
@@ -244,6 +275,65 @@
                 <option value="backlog">Backlog</option>
                 <option value="archive">Archive</option>
               </select>
+              <label for="default-timeline-mode">Default timeline mode</label>
+              <select id="default-timeline-mode">
+                <option value="week">Week</option>
+                <option value="month">Month</option>
+              </select>
+              <label for="default-backlog-group">Default backlog grouping</label>
+              <select id="default-backlog-group">
+                <option value="schedule">By schedule</option>
+                <option value="effort">By effort</option>
+                <option value="priority">By priority</option>
+              </select>
+            </div>
+            <div class="settings-section">
+              <h3>Behavior</h3>
+              <label for="delete-behavior">Delete action</label>
+              <select id="delete-behavior">
+                <option value="archive">Archive on delete</option>
+                <option value="delete">Delete permanently</option>
+              </select>
+              <label for="auto-archive-days">Auto-archive Done after (days)</label>
+              <input id="auto-archive-days" type="number" min="0" max="365" step="1" />
+              <label for="default-due-date">Default due date</label>
+              <select id="default-due-date">
+                <option value="none">None</option>
+                <option value="today">Today</option>
+                <option value="tomorrow">Tomorrow</option>
+              </select>
+              <label class="settings-toggle">
+                <input type="checkbox" id="show-top-pick" />
+                <span>Show Today top pick</span>
+              </label>
+            </div>
+            <div class="settings-section">
+              <h3>Display</h3>
+              <label class="settings-toggle">
+                <input type="checkbox" id="compact-mode" />
+                <span>Compact density</span>
+              </label>
+              <label class="settings-toggle">
+                <input type="checkbox" id="show-meta-chips" />
+                <span>Show meta chips by default</span>
+              </label>
+              <label class="settings-toggle">
+                <input type="checkbox" id="reduce-motion" />
+                <span>Reduce motion</span>
+              </label>
+            </div>
+            <div class="settings-section">
+              <h3>Data</h3>
+              <div class="settings-actions">
+                <button class="btn" id="export-data" type="button">Export data</button>
+                <button class="btn" id="import-data" type="button">Import data</button>
+                <input type="file" id="import-file" accept="application/json" hidden />
+              </div>
+              <div class="settings-actions">
+                <button class="btn ghost" id="restore-archived" type="button">Restore archived tasks</button>
+                <button class="btn ghost" id="clear-archive-settings" type="button">Clear archive</button>
+              </div>
+              <button class="btn ghost" id="reset-data" type="button">Reset all data</button>
             </div>
           </div>
         </section>

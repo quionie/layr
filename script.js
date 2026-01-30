@@ -18,11 +18,32 @@ const columns = Array.from(document.querySelectorAll(".column"));
 const navLinks = Array.from(document.querySelectorAll("[data-view]"));
 const viewPanels = Array.from(document.querySelectorAll("[data-view-panel]"));
 const todayContent = document.getElementById("today-content");
+const todayTitleEl = document.getElementById("today-title");
+const todayCountOverdue = document.getElementById("today-count-overdue");
+const todayCountDue = document.getElementById("today-count-due");
+const todayCountDoing = document.getElementById("today-count-doing");
+const todayCountTotal = document.getElementById("today-count-total");
+const todayPulse = document.getElementById("today-pulse");
 const backlogContent = document.getElementById("backlog-content");
 const backlogSearchInput = document.getElementById("backlog-search-input");
 const backlogCountEl = document.getElementById("backlog-count");
 const viewModeBtns = Array.from(document.querySelectorAll(".view-mode-btn"));
 const defaultViewSelect = document.getElementById("default-view");
+const defaultTimelineSelect = document.getElementById("default-timeline-mode");
+const defaultBacklogGroupSelect = document.getElementById("default-backlog-group");
+const deleteBehaviorSelect = document.getElementById("delete-behavior");
+const autoArchiveDaysInput = document.getElementById("auto-archive-days");
+const defaultDueDateSelect = document.getElementById("default-due-date");
+const showTopPickToggle = document.getElementById("show-top-pick");
+const compactModeToggle = document.getElementById("compact-mode");
+const showMetaChipsToggle = document.getElementById("show-meta-chips");
+const reduceMotionToggle = document.getElementById("reduce-motion");
+const exportDataBtn = document.getElementById("export-data");
+const importDataBtn = document.getElementById("import-data");
+const importFileInput = document.getElementById("import-file");
+const restoreArchivedBtn = document.getElementById("restore-archived");
+const clearArchiveSettingsBtn = document.getElementById("clear-archive-settings");
+const resetDataBtn = document.getElementById("reset-data");
 
 // Timeline elements
 const timelineGrid = document.getElementById("timeline-grid");
@@ -51,13 +72,74 @@ let activeView = settings.defaultView || "board";
 let visibleLayers = loadLayers();
 let archiveSearchQuery = "";
 let archiveRange = "all";
+let suppressTopPick = false;
+
+backlogGroupMode = settings.defaultBacklogGroup || backlogGroupMode;
+timelineMode = settings.defaultTimelineMode || timelineMode;
+
+function applySettings() {
+  document.body.classList.toggle("compact-mode", Boolean(settings.compactMode));
+  document.body.classList.toggle("hide-meta", !settings.showMetaChips);
+  document.body.classList.toggle("reduce-motion", Boolean(settings.reduceMotion));
+}
+
+function syncSettingsControls() {
+  if (defaultViewSelect) defaultViewSelect.value = settings.defaultView || "board";
+  if (defaultTimelineSelect) defaultTimelineSelect.value = settings.defaultTimelineMode || "week";
+  if (defaultBacklogGroupSelect) defaultBacklogGroupSelect.value = settings.defaultBacklogGroup || "schedule";
+  if (deleteBehaviorSelect) deleteBehaviorSelect.value = settings.deleteBehavior || "archive";
+  if (autoArchiveDaysInput) autoArchiveDaysInput.value = Number(settings.autoArchiveDays || 0);
+  if (defaultDueDateSelect) defaultDueDateSelect.value = settings.defaultDueDate || "none";
+  if (showTopPickToggle) showTopPickToggle.checked = Boolean(settings.showTopPick);
+  if (compactModeToggle) compactModeToggle.checked = Boolean(settings.compactMode);
+  if (showMetaChipsToggle) showMetaChipsToggle.checked = Boolean(settings.showMetaChips);
+  if (reduceMotionToggle) reduceMotionToggle.checked = Boolean(settings.reduceMotion);
+}
+
+function getDefaultDueDateValue() {
+  const mode = settings.defaultDueDate || "none";
+  if (mode === "today") return toLocalDateString(new Date());
+  if (mode === "tomorrow") return toLocalDateString(addDays(new Date(), 1));
+  return "";
+}
+
+function applyAutoArchive() {
+  const days = Number(settings.autoArchiveDays || 0);
+  if (!days || days <= 0) return;
+  const now = new Date();
+  const cutoffMs = days * 86400000;
+  let changed = false;
+  boardState.tasks.forEach((task) => {
+    if (task.status !== "done" || !task.completedAt) return;
+    const completed = new Date(task.completedAt);
+    if (Number.isNaN(completed.getTime())) return;
+    if (now - completed >= cutoffMs) {
+      setTaskStatus(task, "archived");
+      task.archivedAt = task.archivedAt || new Date().toISOString();
+      changed = true;
+    }
+  });
+  if (changed) saveState();
+}
 
 function loadSettings() {
+  const defaults = {
+    defaultView: "board",
+    defaultTimelineMode: "week",
+    defaultBacklogGroup: "schedule",
+    deleteBehavior: "archive",
+    autoArchiveDays: 0,
+    defaultDueDate: "none",
+    showTopPick: true,
+    compactMode: false,
+    showMetaChips: true,
+    reduceMotion: false,
+  };
   try {
     const raw = localStorage.getItem("layr-settings");
-    if (raw) return JSON.parse(raw);
+    if (raw) return { ...defaults, ...JSON.parse(raw) };
   } catch {}
-  return { defaultView: "board" };
+  return defaults;
 }
 
 function saveSettings() {
@@ -159,6 +241,13 @@ function formatShortDate(dateValue) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function formatLongDate(dateValue) {
+  if (!dateValue) return "";
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+}
+
 function toDateInputValue(dateValue) {
   if (!dateValue) return "";
   const date = parseLocalDate(dateValue);
@@ -201,11 +290,18 @@ function parseLocalDate(dateValue) {
 function setTaskStatus(task, nextStatus) {
   const prevStatus = task.status;
   task.status = nextStatus;
+  if (nextStatus !== "archived") {
+    task.archivedAt = null;
+  }
   if (nextStatus === "done") {
     task.completedAt = task.completedAt || new Date().toISOString();
   } else if (prevStatus === "done") {
     task.completedAt = null;
   }
+}
+
+function isArchived(task) {
+  return task.status === "archived";
 }
 
 function findTask(cardId) {
@@ -226,6 +322,15 @@ function deleteCard(cardId) {
   const found = findTask(cardId);
   if (!found) return;
   boardState.tasks.splice(found.index, 1);
+  saveState();
+  renderBoard();
+}
+
+function archiveCard(cardId) {
+  const found = findTask(cardId);
+  if (!found) return;
+  setTaskStatus(found.task, "archived");
+  found.task.archivedAt = found.task.archivedAt || new Date().toISOString();
   saveState();
   renderBoard();
 }
@@ -472,7 +577,7 @@ function createCardElement(card) {
     const currentValue = blockedSelect.value;
     blockedSelect.innerHTML = '<option value="">Nothing - Ready to work</option>';
     boardState.tasks
-      .filter(t => t.id !== card.id && t.status !== "done")
+      .filter(t => t.id !== card.id && t.status !== "done" && t.status !== "archived")
       .forEach(t => {
         const opt = document.createElement("option");
         opt.value = t.id;
@@ -567,8 +672,16 @@ function createCardElement(card) {
   });
 
   deleteButton.addEventListener("click", () => {
-    if (confirm("Delete this task?")) {
+    if (settings.deleteBehavior === "delete") {
+      if (!confirm("Delete this task permanently?")) return;
       deleteCard(card.id);
+    } else {
+      if (!confirm("Archive this task? You can restore it later.")) return;
+      archiveCard(card.id);
+      renderArchive();
+      renderBacklog();
+      renderToday();
+      renderTimeline();
     }
   });
 
@@ -697,7 +810,7 @@ function renderColumn(columnKey) {
   const countEl = document.querySelector(`[data-count="${columnKey}"]`);
   const emptyEl = document.querySelector(`[data-empty="${columnKey}"]`);
   column.innerHTML = "";
-  const tasks = boardState.tasks.filter((task) => task.status === columnKey);
+  const tasks = boardState.tasks.filter((task) => task.status === columnKey && task.status !== "archived");
   tasks.forEach((task) => {
     column.appendChild(createCardElement(task));
   });
@@ -706,12 +819,13 @@ function renderColumn(columnKey) {
 }
 
 function updateStats() {
-  const total = boardState.tasks.length;
+  const total = boardState.tasks.filter((task) => task.status !== "archived").length;
   const totalEl = document.getElementById("stat-total");
   if (totalEl) totalEl.textContent = total;
 }
 
 function renderBoard() {
+  applyAutoArchive();
   renderColumn("todo");
   renderColumn("doing");
   renderColumn("done");
@@ -761,7 +875,7 @@ function calculatePriorityScore(task) {
   // Penalty for blocked tasks (can't work on them anyway)
   if (task.blockedBy) {
     const blocker = boardState.tasks.find(t => t.id === task.blockedBy);
-    if (blocker && blocker.status !== "done") {
+    if (blocker && blocker.status !== "done" && blocker.status !== "archived") {
       score -= 5; // Significant penalty for blocked
     }
   }
@@ -795,7 +909,13 @@ function sortByPriority(tasks) {
 
 function getTopPick(tasks) {
   // Get the single most important task to work on right now
-  const sorted = sortByPriority(tasks.filter(t => !t.blockedBy || boardState.tasks.find(b => b.id === t.blockedBy)?.status === "done"));
+  const sorted = sortByPriority(
+    tasks.filter((t) => {
+      if (!t.blockedBy) return true;
+      const blocker = boardState.tasks.find((b) => b.id === t.blockedBy);
+      return blocker?.status === "done" || blocker?.status === "archived";
+    })
+  );
   return sorted[0] || null;
 }
 
@@ -804,12 +924,32 @@ function renderToday() {
   todayContent.innerHTML = "";
 
   // Get all relevant tasks
-  const allTasks = boardState.tasks.filter((task) => task.status !== "done");
+  const allTasks = boardState.tasks.filter((task) => task.status !== "done" && task.status !== "archived");
 
   // Categorize tasks
   const inProgress = allTasks.filter((task) => task.status === "doing");
   const dueToday = allTasks.filter((task) => task.status !== "doing" && isDueToday(task.dueDate));
   const overdue = allTasks.filter((task) => task.status !== "doing" && isOverdue(task.dueDate));
+  const totalRelevant = inProgress.length + dueToday.length + overdue.length;
+
+  if (todayTitleEl) {
+    todayTitleEl.textContent = formatLongDate(new Date());
+  }
+  if (todayCountOverdue) todayCountOverdue.textContent = overdue.length;
+  if (todayCountDue) todayCountDue.textContent = dueToday.length;
+  if (todayCountDoing) todayCountDoing.textContent = inProgress.length;
+  if (todayCountTotal) todayCountTotal.textContent = totalRelevant;
+  if (todayPulse) {
+    if (overdue.length > 0) {
+      todayPulse.textContent = `${overdue.length} overdue. Clear these first.`;
+    } else if (dueToday.length > 0) {
+      todayPulse.textContent = `${dueToday.length} due today. Protect time to finish.`;
+    } else if (inProgress.length > 0) {
+      todayPulse.textContent = `${inProgress.length} in progress. Keep momentum.`;
+    } else {
+      todayPulse.textContent = "All clear. Enjoy the buffer or pull from Backlog.";
+    }
+  }
 
   // Check if there are any tasks to show
   const hasAnyTasks = inProgress.length > 0 || dueToday.length > 0 || overdue.length > 0;
@@ -951,8 +1091,8 @@ function renderToday() {
   const allRelevantTasks = [...sortedInProgress, ...sortedDueToday, ...sortedOverdue];
   const topPick = getTopPick(allRelevantTasks);
 
-  // Create Top Pick banner if we have weight data and a clear winner
-  if (topPick && visibleLayers.weight && (topPick.impact || topPick.urgency)) {
+  // Create Top Pick banner if enabled, we have weight data and a clear winner
+  if (settings.showTopPick && topPick && visibleLayers.weight && (topPick.impact || topPick.urgency)) {
     const topPickBanner = document.createElement("div");
     topPickBanner.className = "today-top-pick";
 
@@ -1002,6 +1142,7 @@ function getBacklogTasks() {
   // Backlog = todo tasks that aren't due today or overdue (those show in Today view)
   return boardState.tasks.filter((task) => {
     if (task.status !== "todo") return false;
+    if (task.status === "archived") return false;
     if (isDueToday(task.dueDate)) return false;
     if (isOverdue(task.dueDate)) return false;
     return true;
@@ -1400,12 +1541,12 @@ function getTimelineDays() {
 
 function getTasksForTimeline() {
   // Get tasks that have due dates (for display on timeline)
-  return boardState.tasks.filter(task => task.dueDate && task.status !== "done");
+  return boardState.tasks.filter(task => task.dueDate && task.status !== "done" && task.status !== "archived");
 }
 
 function getUnscheduledTasks() {
   // Tasks without due dates that are not done
-  return boardState.tasks.filter(task => !task.dueDate && task.status !== "done");
+  return boardState.tasks.filter(task => !task.dueDate && task.status !== "done" && task.status !== "archived");
 }
 
 function getTaskDayIndex(task, days) {
@@ -1801,10 +1942,14 @@ function goToTimelineToday() {
 // ==================== ARCHIVE VIEW ====================
 
 function getArchiveTasks() {
-  return boardState.tasks.filter(task => task.status === "done");
+  return boardState.tasks.filter(task => task.status === "done" || task.status === "archived");
 }
 
 function getCompletionDate(task) {
+  if (task.status === "archived" && task.archivedAt) {
+    const date = new Date(task.archivedAt);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
   if (task.completedAt) {
     const date = new Date(task.completedAt);
     if (!Number.isNaN(date.getTime())) return date;
@@ -1864,7 +2009,7 @@ function renderArchive() {
         </svg>
       </div>
       <h3>No archived tasks yet</h3>
-      <p>Completed tasks will appear here with restore and delete actions.</p>
+      <p>Completed or archived tasks will appear here with restore and delete actions.</p>
     `;
     archiveList.appendChild(empty);
     return;
@@ -1872,7 +2017,12 @@ function renderArchive() {
 
   filtered.forEach(task => {
     const completion = getCompletionDate(task);
-    const completionText = completion ? formatRelativeTime(completion.toISOString()) : "Completed";
+    const isTaskArchived = task.status === "archived";
+    const completionText = completion
+      ? formatRelativeTime(completion.toISOString())
+      : isTaskArchived
+        ? "Archived"
+        : "Completed";
     const completionDate = completion ? formatShortDate(completion) : "";
     const dueDate = task.dueDate ? formatShortDate(parseLocalDate(task.dueDate)) : "";
 
@@ -1883,7 +2033,8 @@ function renderArchive() {
         <div class="archive-item-title">${escapeHtml(task.title)}</div>
         <div class="archive-item-meta">
           <span class="archive-meta-chip">${completionText}</span>
-          ${completionDate ? `<span class="archive-meta-chip subtle">Completed ${completionDate}</span>` : ""}
+          ${isTaskArchived ? `<span class="archive-meta-chip subtle">Deleted</span>` : ""}
+          ${completionDate ? `<span class="archive-meta-chip subtle">${isTaskArchived ? "Archived" : "Completed"} ${completionDate}</span>` : ""}
           ${dueDate ? `<span class="archive-meta-chip subtle">Due ${dueDate}</span>` : ""}
         </div>
       </div>
@@ -2014,7 +2165,7 @@ function openModal() {
   modal.classList.add("show");
   modal.setAttribute("aria-hidden", "false");
   titleInput.value = "";
-  dueDateInput.value = "";
+  dueDateInput.value = getDefaultDueDateValue();
   effortInput.value = "";
   titleInput.focus();
 }
@@ -2033,6 +2184,7 @@ function addCard(title) {
     dueDate: dueDateInput.value ? dueDateInput.value : null,
     createdAt: new Date().toISOString(),
     completedAt: null,
+    archivedAt: null,
     description: "",
     expanded: false,
     // Weight fields for priority scoring
@@ -2081,6 +2233,199 @@ if (defaultViewSelect) {
   defaultViewSelect.addEventListener("change", () => {
     settings.defaultView = defaultViewSelect.value;
     saveSettings();
+  });
+}
+
+if (defaultTimelineSelect) {
+  defaultTimelineSelect.value = settings.defaultTimelineMode || "week";
+  defaultTimelineSelect.addEventListener("change", () => {
+    settings.defaultTimelineMode = defaultTimelineSelect.value;
+    timelineMode = settings.defaultTimelineMode;
+    timelineModeBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.mode === timelineMode));
+    timelineStartDate = timelineMode === "week" ? getWeekStart(new Date()) : getMonthStart(new Date());
+    saveSettings();
+  });
+}
+
+if (defaultBacklogGroupSelect) {
+  defaultBacklogGroupSelect.value = settings.defaultBacklogGroup || "schedule";
+  defaultBacklogGroupSelect.addEventListener("change", () => {
+    settings.defaultBacklogGroup = defaultBacklogGroupSelect.value;
+    backlogGroupMode = settings.defaultBacklogGroup;
+    viewModeBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.group === backlogGroupMode));
+    saveSettings();
+    renderBacklog();
+  });
+}
+
+if (deleteBehaviorSelect) {
+  deleteBehaviorSelect.value = settings.deleteBehavior || "archive";
+  deleteBehaviorSelect.addEventListener("change", () => {
+    settings.deleteBehavior = deleteBehaviorSelect.value;
+    saveSettings();
+  });
+}
+
+if (autoArchiveDaysInput) {
+  autoArchiveDaysInput.value = Number(settings.autoArchiveDays || 0);
+  autoArchiveDaysInput.addEventListener("change", () => {
+    settings.autoArchiveDays = Number(autoArchiveDaysInput.value || 0);
+    saveSettings();
+    applyAutoArchive();
+    renderArchive();
+    renderBoard();
+  });
+}
+
+if (defaultDueDateSelect) {
+  defaultDueDateSelect.value = settings.defaultDueDate || "none";
+  defaultDueDateSelect.addEventListener("change", () => {
+    settings.defaultDueDate = defaultDueDateSelect.value;
+    saveSettings();
+  });
+}
+
+if (showTopPickToggle) {
+  showTopPickToggle.checked = Boolean(settings.showTopPick);
+  showTopPickToggle.addEventListener("change", () => {
+    settings.showTopPick = showTopPickToggle.checked;
+    saveSettings();
+    renderToday();
+  });
+}
+
+if (compactModeToggle) {
+  compactModeToggle.checked = Boolean(settings.compactMode);
+  compactModeToggle.addEventListener("change", () => {
+    settings.compactMode = compactModeToggle.checked;
+    saveSettings();
+    applySettings();
+  });
+}
+
+if (showMetaChipsToggle) {
+  showMetaChipsToggle.checked = Boolean(settings.showMetaChips);
+  showMetaChipsToggle.addEventListener("change", () => {
+    settings.showMetaChips = showMetaChipsToggle.checked;
+    saveSettings();
+    applySettings();
+  });
+}
+
+if (reduceMotionToggle) {
+  reduceMotionToggle.checked = Boolean(settings.reduceMotion);
+  reduceMotionToggle.addEventListener("change", () => {
+    settings.reduceMotion = reduceMotionToggle.checked;
+    saveSettings();
+    applySettings();
+  });
+}
+
+if (exportDataBtn) {
+  exportDataBtn.addEventListener("click", () => {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      state: boardState,
+      settings,
+      layers: visibleLayers,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `layr-export-${new Date().toISOString().split("T")[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+if (importDataBtn && importFileInput) {
+  importDataBtn.addEventListener("click", () => importFileInput.click());
+  importFileInput.addEventListener("change", async () => {
+    const file = importFileInput.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!parsed?.state?.tasks) {
+        alert("Invalid file format.");
+        return;
+      }
+      boardState = parsed.state;
+      if (parsed.settings) settings = { ...settings, ...parsed.settings };
+      if (parsed.layers) visibleLayers = parsed.layers;
+      backlogGroupMode = settings.defaultBacklogGroup || backlogGroupMode;
+      timelineMode = settings.defaultTimelineMode || timelineMode;
+      saveState();
+      saveSettings();
+      saveLayers();
+      syncSettingsControls();
+      applySettings();
+      viewModeBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.group === backlogGroupMode));
+      timelineModeBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.mode === timelineMode));
+      renderBoard();
+      renderToday();
+      renderBacklog();
+      renderTimeline();
+      renderArchive();
+    } catch {
+      alert("Could not import file.");
+    } finally {
+      importFileInput.value = "";
+    }
+  });
+}
+
+if (restoreArchivedBtn) {
+  restoreArchivedBtn.addEventListener("click", () => {
+    const archived = boardState.tasks.filter((task) => task.status === "archived");
+    if (archived.length === 0) return;
+    if (!confirm(`Restore ${archived.length} archived task${archived.length !== 1 ? "s" : ""}?`)) return;
+    archived.forEach((task) => setTaskStatus(task, "todo"));
+    saveState();
+    renderArchive();
+    renderBoard();
+    renderBacklog();
+    renderToday();
+    renderTimeline();
+  });
+}
+
+if (clearArchiveSettingsBtn) {
+  clearArchiveSettingsBtn.addEventListener("click", () => {
+    if (!confirm("Clear all archived and completed tasks? This cannot be undone.")) return;
+    boardState.tasks = boardState.tasks.filter((task) => task.status !== "done" && task.status !== "archived");
+    saveState();
+    renderArchive();
+    renderBoard();
+    renderBacklog();
+    renderToday();
+    renderTimeline();
+  });
+}
+
+if (resetDataBtn) {
+  resetDataBtn.addEventListener("click", () => {
+    if (!confirm("Reset all data and settings? This cannot be undone.")) return;
+    localStorage.removeItem(stateKey);
+    localStorage.removeItem("layr-settings");
+    localStorage.removeItem("layr-layers");
+    boardState = structuredClone(defaultState);
+    settings = loadSettings();
+    visibleLayers = loadLayers();
+    backlogGroupMode = settings.defaultBacklogGroup || backlogGroupMode;
+    timelineMode = settings.defaultTimelineMode || timelineMode;
+    saveState();
+    saveSettings();
+    saveLayers();
+    syncSettingsControls();
+    applySettings();
+    renderBoard();
+    renderToday();
+    renderBacklog();
+    renderTimeline();
+    renderArchive();
   });
 }
 
@@ -2162,7 +2507,7 @@ archiveFilterBtns.forEach((btn) => {
 if (archiveClearBtn) {
   archiveClearBtn.addEventListener("click", () => {
     if (!confirm("Clear all archived tasks? This cannot be undone.")) return;
-    boardState.tasks = boardState.tasks.filter((task) => task.status !== "done");
+    boardState.tasks = boardState.tasks.filter((task) => task.status !== "done" && task.status !== "archived");
     saveState();
     renderArchive();
     renderBoard();
@@ -2172,6 +2517,11 @@ if (archiveClearBtn) {
   });
 }
 
+syncSettingsControls();
+applySettings();
+viewModeBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.group === backlogGroupMode));
+timelineModeBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.mode === timelineMode));
+applyAutoArchive();
 renderBoard();
 renderToday();
 renderBacklog();
@@ -2197,6 +2547,11 @@ function setActiveView(view) {
     renderBacklog();
   }
   if (activeView === "timeline") {
+    if (settings.defaultTimelineMode && timelineMode !== settings.defaultTimelineMode) {
+      timelineMode = settings.defaultTimelineMode;
+      timelineModeBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.mode === timelineMode));
+      timelineStartDate = timelineMode === "week" ? getWeekStart(new Date()) : getMonthStart(new Date());
+    }
     renderTimeline();
   }
   if (activeView === "archive") {
