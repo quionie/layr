@@ -11,7 +11,7 @@
       <aside class="sidebar">
         <div class="sidebar-top">
           <div class="sidebar-brand">Layr</div>
-          <div class="sidebar-subtitle">Kanban Board</div>
+          <div class="sidebar-subtitle">Hi there.</div>
         </div>
 
         <nav class="sidebar-nav" aria-label="Primary">
@@ -22,31 +22,29 @@
           <a class="nav-link" href="#" data-view="archive">Archive</a>
         </nav>
 
-        <button id="focus-toggle" class="btn focus-toggle" type="button" aria-pressed="false">
-          Focus mode
-        </button>
-
         <div class="sidebar-footer">
-          <div class="user-chip">
-            <span class="avatar" aria-hidden="true"></span>
-            <span>Guest</span>
-          </div>
-          <button class="btn ghost" type="button">Settings</button>
+          <button class="nav-link settings-link" type="button" data-view="settings">Settings</button>
         </div>
       </aside>
 
       <div class="main-content">
-        <header class="app-header">
+        <header class="app-header view" data-view-panel="board-header">
           <div class="header-content">
             <div class="layer-toggles" role="group" aria-label="Visible layers">
               <button class="layer-toggle is-active" data-layer="status" disabled aria-pressed="true">Status</button>
               <button class="layer-toggle" data-layer="time" aria-pressed="false">Time</button>
               <button class="layer-toggle" data-layer="effort" aria-pressed="false">Effort</button>
+              <button class="layer-toggle" data-layer="weight" aria-pressed="false">Weight</button>
             </div>
             <div class="board-stats">
               <span class="stat"><strong id="stat-total">0</strong> tasks</span>
             </div>
-            <button id="add-card" class="btn primary" type="button">+ New task</button>
+            <div class="board-actions">
+              <button id="focus-toggle" class="btn focus-toggle" type="button" aria-pressed="false">
+                Focus mode
+              </button>
+              <button id="add-card" class="btn primary" type="button">+ New task</button>
+            </div>
           </div>
         </header>
 
@@ -133,10 +131,32 @@
                       <polyline points="12 6 12 12 16 14"></polyline>
                     </svg>
                   </button>
+                  <button class="view-mode-btn" data-group="priority" title="Sort by priority">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>
             <div id="backlog-content"></div>
+          </div>
+        </section>
+
+        <section class="settings-view view" data-view-panel="settings" aria-label="Settings">
+          <div class="settings-container">
+            <div class="settings-header">
+              <h2>Settings</h2>
+              <p>Personalize your workspace defaults.</p>
+            </div>
+            <div class="settings-section">
+              <h3>Views</h3>
+              <label for="default-view">Default landing view</label>
+              <select id="default-view">
+                <option value="board">Board</option>
+                <option value="today">Today</option>
+              </select>
+            </div>
           </div>
         </section>
       </div>

@@ -15,28 +15,42 @@ const layerToggles = Array.from(document.querySelectorAll(".layer-toggle"));
 const cancelButton = document.getElementById("cancel");
 const focusToggle = document.getElementById("focus-toggle");
 const columns = Array.from(document.querySelectorAll(".column"));
-const navLinks = Array.from(document.querySelectorAll(".nav-link"));
+const navLinks = Array.from(document.querySelectorAll("[data-view]"));
 const viewPanels = Array.from(document.querySelectorAll("[data-view-panel]"));
 const todayContent = document.getElementById("today-content");
 const backlogContent = document.getElementById("backlog-content");
 const backlogSearchInput = document.getElementById("backlog-search-input");
 const backlogCountEl = document.getElementById("backlog-count");
 const viewModeBtns = Array.from(document.querySelectorAll(".view-mode-btn"));
+const defaultViewSelect = document.getElementById("default-view");
 
 let boardState = loadState();
 let backlogGroupMode = "schedule"; // "schedule" or "effort"
 let backlogSearchQuery = "";
 let focusMode = false;
 let focusIndex = 0;
-let activeView = "board";
+let settings = loadSettings();
+let activeView = settings.defaultView || "board";
 let visibleLayers = loadLayers();
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem("layr-settings");
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { defaultView: "board" };
+}
+
+function saveSettings() {
+  localStorage.setItem("layr-settings", JSON.stringify(settings));
+}
 
 function loadLayers() {
   try {
     const raw = localStorage.getItem("layr-layers");
     if (raw) return JSON.parse(raw);
   } catch {}
-  return { status: true, time: false, effort: false };
+  return { status: true, time: false, effort: false, weight: false };
 }
 
 function saveLayers() {
@@ -46,6 +60,7 @@ function saveLayers() {
 function applyLayers() {
   document.body.classList.toggle("layer-time", visibleLayers.time);
   document.body.classList.toggle("layer-effort", visibleLayers.effort);
+  document.body.classList.toggle("layer-weight", visibleLayers.weight);
   layerToggles.forEach((btn) => {
     const layer = btn.dataset.layer;
     const isActive = visibleLayers[layer];
@@ -224,8 +239,39 @@ function createCardElement(card) {
       metaRow.appendChild(effortChip);
     }
 
+    // Impact chip (weight layer)
+    if (card.impact) {
+      const impactChip = document.createElement("span");
+      impactChip.className = `card-chip card-chip-impact impact-${card.impact}`;
+      const impactLabels = { high: "High Impact", medium: "Medium", low: "Low" };
+      impactChip.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg><span>${impactLabels[card.impact]}</span>`;
+      metaRow.appendChild(impactChip);
+    }
+
+    // Urgency chip (weight layer)
+    if (card.urgency) {
+      const urgencyChip = document.createElement("span");
+      urgencyChip.className = `card-chip card-chip-urgency urgency-${card.urgency}`;
+      const urgencyLabels = { high: "Urgent", medium: "Soon", low: "Later" };
+      urgencyChip.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg><span>${urgencyLabels[card.urgency]}</span>`;
+      metaRow.appendChild(urgencyChip);
+    }
+
+    // Blocked indicator (weight layer)
+    if (card.blockedBy) {
+      const blockerTask = boardState.tasks.find(t => t.id === card.blockedBy);
+      if (blockerTask) {
+        const blockedChip = document.createElement("span");
+        blockedChip.className = "card-chip card-chip-blocked";
+        const blockerName = blockerTask.title.length > 20 ? blockerTask.title.slice(0, 20) + "..." : blockerTask.title;
+        blockedChip.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9A7.902 7.902 0 014 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1A7.902 7.902 0 0120 12c0 4.42-3.58 8-8 8z"/></svg><span>Blocked: ${blockerName}</span>`;
+        metaRow.appendChild(blockedChip);
+      }
+    }
+
     // Show meta row only if there's content
-    el.classList.toggle("has-meta", card.dueDate || card.effort);
+    const hasMeta = card.dueDate || card.effort || card.impact || card.urgency || card.blockedBy;
+    el.classList.toggle("has-meta", hasMeta);
   }
 
   updateMetaDisplay();
@@ -296,6 +342,86 @@ function createCardElement(card) {
   fieldsRow.appendChild(dateField);
   fieldsRow.appendChild(effortField);
 
+  // Weight fields row (Impact & Urgency)
+  const weightRow = document.createElement("div");
+  weightRow.className = "card-fields-row card-weight-row";
+
+  // Impact field
+  const impactField = document.createElement("div");
+  impactField.className = "card-field";
+
+  const impactLabel = document.createElement("label");
+  impactLabel.className = "card-label";
+  impactLabel.textContent = "Impact";
+
+  const impactSelect = document.createElement("select");
+  impactSelect.className = "card-input card-weight-select";
+  impactSelect.innerHTML = `
+    <option value="">Not set</option>
+    <option value="high">High - Moves the needle</option>
+    <option value="medium">Medium - Important</option>
+    <option value="low">Low - Nice to have</option>
+  `;
+  impactSelect.value = card.impact || "";
+
+  impactField.appendChild(impactLabel);
+  impactField.appendChild(impactSelect);
+
+  // Urgency field
+  const urgencyField = document.createElement("div");
+  urgencyField.className = "card-field";
+
+  const urgencyLabel = document.createElement("label");
+  urgencyLabel.className = "card-label";
+  urgencyLabel.textContent = "Urgency";
+
+  const urgencySelect = document.createElement("select");
+  urgencySelect.className = "card-input card-weight-select";
+  urgencySelect.innerHTML = `
+    <option value="">Not set</option>
+    <option value="high">High - Decays fast</option>
+    <option value="medium">Medium - Has deadline</option>
+    <option value="low">Low - Can wait</option>
+  `;
+  urgencySelect.value = card.urgency || "";
+
+  urgencyField.appendChild(urgencyLabel);
+  urgencyField.appendChild(urgencySelect);
+
+  weightRow.appendChild(impactField);
+  weightRow.appendChild(urgencyField);
+
+  // Blocked by field
+  const blockedSection = document.createElement("div");
+  blockedSection.className = "card-section card-blocked-section";
+
+  const blockedLabel = document.createElement("label");
+  blockedLabel.className = "card-label";
+  blockedLabel.textContent = "Blocked by";
+
+  const blockedSelect = document.createElement("select");
+  blockedSelect.className = "card-input card-blocked-select";
+
+  // Populate with other tasks (not self, not done)
+  function updateBlockedOptions() {
+    const currentValue = blockedSelect.value;
+    blockedSelect.innerHTML = '<option value="">Nothing - Ready to work</option>';
+    boardState.tasks
+      .filter(t => t.id !== card.id && t.status !== "done")
+      .forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.title.length > 40 ? t.title.slice(0, 40) + "..." : t.title;
+        blockedSelect.appendChild(opt);
+      });
+    blockedSelect.value = currentValue || "";
+  }
+  updateBlockedOptions();
+  blockedSelect.value = card.blockedBy || "";
+
+  blockedSection.appendChild(blockedLabel);
+  blockedSection.appendChild(blockedSelect);
+
   // Toggle button
   const toggleButton = document.createElement("button");
   toggleButton.type = "button";
@@ -304,6 +430,8 @@ function createCardElement(card) {
 
   body.appendChild(descSection);
   body.appendChild(fieldsRow);
+  body.appendChild(weightRow);
+  body.appendChild(blockedSection);
 
   // === ASSEMBLE CARD ===
   el.appendChild(header);
@@ -317,7 +445,13 @@ function createCardElement(card) {
   el.classList.toggle("is-done", card.status === "done");
   el.classList.toggle("has-due", Boolean(card.dueDate));
   el.classList.toggle("has-effort", Boolean(card.effort));
-  el.classList.toggle("has-meta", Boolean(card.dueDate || card.effort));
+  el.classList.toggle("has-impact", Boolean(card.impact));
+  el.classList.toggle("has-urgency", Boolean(card.urgency));
+  el.classList.toggle("is-blocked", Boolean(card.blockedBy));
+  el.dataset.impact = card.impact || "";
+  el.dataset.urgency = card.urgency || "";
+  const hasMeta = card.dueDate || card.effort || card.impact || card.urgency || card.blockedBy;
+  el.classList.toggle("has-meta", Boolean(hasMeta));
 
   // === EVENT HANDLERS ===
 
@@ -440,6 +574,35 @@ function createCardElement(card) {
     }
   });
 
+  // Impact auto-save
+  impactSelect.addEventListener("change", () => {
+    const nextImpact = impactSelect.value || null;
+    card.impact = nextImpact;
+    el.classList.toggle("has-impact", Boolean(nextImpact));
+    el.dataset.impact = nextImpact || "";
+    updateCardState(card.id, { impact: nextImpact });
+    updateMetaDisplay();
+  });
+
+  // Urgency auto-save
+  urgencySelect.addEventListener("change", () => {
+    const nextUrgency = urgencySelect.value || null;
+    card.urgency = nextUrgency;
+    el.classList.toggle("has-urgency", Boolean(nextUrgency));
+    el.dataset.urgency = nextUrgency || "";
+    updateCardState(card.id, { urgency: nextUrgency });
+    updateMetaDisplay();
+  });
+
+  // Blocked by auto-save
+  blockedSelect.addEventListener("change", () => {
+    const nextBlocked = blockedSelect.value || null;
+    card.blockedBy = nextBlocked;
+    el.classList.toggle("is-blocked", Boolean(nextBlocked));
+    updateCardState(card.id, { blockedBy: nextBlocked });
+    updateMetaDisplay();
+  });
+
   // Drag & Drop
   el.addEventListener("dragstart", (event) => {
     if (
@@ -510,6 +673,66 @@ function isOverdue(dueDate) {
   today.setHours(0, 0, 0, 0);
   const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
   return dueDay < today;
+}
+
+// ==================== PRIORITY SCORING ====================
+// Answers: "What should I actually work on right now?"
+
+function calculatePriorityScore(task) {
+  // Base scores for impact and urgency (0-3 scale)
+  const impactScores = { high: 3, medium: 2, low: 1 };
+  const urgencyScores = { high: 3, medium: 2, low: 1 };
+
+  const impact = impactScores[task.impact] || 0;
+  const urgency = urgencyScores[task.urgency] || 0;
+
+  // Core score: Impact × Urgency (max 9)
+  let score = impact * urgency;
+
+  // Boost for tasks with both set (shows intention)
+  if (task.impact && task.urgency) {
+    score += 1;
+  }
+
+  // Penalty for blocked tasks (can't work on them anyway)
+  if (task.blockedBy) {
+    const blocker = boardState.tasks.find(t => t.id === task.blockedBy);
+    if (blocker && blocker.status !== "done") {
+      score -= 5; // Significant penalty for blocked
+    }
+  }
+
+  // Boost for overdue tasks (urgency override)
+  if (isOverdue(task.dueDate)) {
+    score += 3;
+  }
+
+  // Boost for due today
+  if (isDueToday(task.dueDate)) {
+    score += 2;
+  }
+
+  // Small boost for tasks in progress (momentum)
+  if (task.status === "doing") {
+    score += 1;
+  }
+
+  return score;
+}
+
+function sortByPriority(tasks) {
+  return [...tasks].sort((a, b) => {
+    const scoreA = calculatePriorityScore(a);
+    const scoreB = calculatePriorityScore(b);
+    // Higher score = more important = should come first
+    return scoreB - scoreA;
+  });
+}
+
+function getTopPick(tasks) {
+  // Get the single most important task to work on right now
+  const sorted = sortByPriority(tasks.filter(t => !t.blockedBy || boardState.tasks.find(b => b.id === t.blockedBy)?.status === "done"));
+  return sorted[0] || null;
 }
 
 function renderToday() {
@@ -655,10 +878,54 @@ function renderToday() {
     return item;
   }
 
+  // Sort each category by priority
+  const sortedOverdue = sortByPriority(overdue);
+  const sortedInProgress = sortByPriority(inProgress);
+  const sortedDueToday = sortByPriority(dueToday);
+
+  // Get the top pick for "What should I work on?"
+  const allRelevantTasks = [...sortedInProgress, ...sortedDueToday, ...sortedOverdue];
+  const topPick = getTopPick(allRelevantTasks);
+
+  // Create Top Pick banner if we have weight data and a clear winner
+  if (topPick && visibleLayers.weight && (topPick.impact || topPick.urgency)) {
+    const topPickBanner = document.createElement("div");
+    topPickBanner.className = "today-top-pick";
+
+    const score = calculatePriorityScore(topPick);
+    const scoreLabel = score >= 8 ? "Critical" : score >= 5 ? "High Priority" : "Suggested";
+
+    topPickBanner.innerHTML = `
+      <div class="top-pick-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+        <span>Work on this next</span>
+        <span class="top-pick-score">${scoreLabel}</span>
+      </div>
+      <div class="top-pick-title">${topPick.title}</div>
+      ${topPick.description ? `<div class="top-pick-desc">${topPick.description.slice(0, 100)}${topPick.description.length > 100 ? "..." : ""}</div>` : ""}
+    `;
+
+    topPickBanner.addEventListener("click", () => {
+      setActiveView("board");
+      setTimeout(() => {
+        const cardEl = document.querySelector(".card[data-id=\"" + topPick.id + "\"]");
+        if (cardEl) {
+          cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          cardEl.classList.add("highlight");
+          setTimeout(() => cardEl.classList.remove("highlight"), 1500);
+        }
+      }, 100);
+    });
+
+    todayContent.appendChild(topPickBanner);
+  }
+
   // Render sections in order: Overdue, In Progress, Due Today
-  const overdueSection = createSection("Overdue", overdue, "overdue");
-  const inProgressSection = createSection("In Progress", inProgress, "doing");
-  const dueTodaySection = createSection("Due Today", dueToday, "due");
+  const overdueSection = createSection("Overdue", sortedOverdue, "overdue");
+  const inProgressSection = createSection("In Progress", sortedInProgress, "doing");
+  const dueTodaySection = createSection("Due Today", sortedDueToday, "due");
 
   if (overdueSection) todayContent.appendChild(overdueSection);
   if (inProgressSection) todayContent.appendChild(inProgressSection);
@@ -766,16 +1033,19 @@ function renderBacklog() {
   // Group tasks based on mode
   if (backlogGroupMode === "schedule") {
     renderBacklogBySchedule(filteredTasks);
-  } else {
+  } else if (backlogGroupMode === "effort") {
     renderBacklogByEffort(filteredTasks);
+  } else if (backlogGroupMode === "priority") {
+    renderBacklogByPriority(filteredTasks);
   }
 }
 
 function renderBacklogBySchedule(tasks) {
-  const thisWeek = tasks.filter((t) => isThisWeek(t.dueDate));
-  const nextWeek = tasks.filter((t) => isNextWeek(t.dueDate));
-  const later = tasks.filter((t) => isLater(t.dueDate));
-  const unscheduled = tasks.filter((t) => !t.dueDate);
+  // Sort each category by priority
+  const thisWeek = sortByPriority(tasks.filter((t) => isThisWeek(t.dueDate)));
+  const nextWeek = sortByPriority(tasks.filter((t) => isNextWeek(t.dueDate)));
+  const later = sortByPriority(tasks.filter((t) => isLater(t.dueDate)));
+  const unscheduled = sortByPriority(tasks.filter((t) => !t.dueDate));
 
   const sections = [
     { title: "This Week", tasks: thisWeek, icon: "this-week", iconSvg: calendarIcon() },
@@ -792,10 +1062,11 @@ function renderBacklogBySchedule(tasks) {
 }
 
 function renderBacklogByEffort(tasks) {
-  const quickWins = tasks.filter((t) => t.effort === "15m" || t.effort === "30m");
-  const medium = tasks.filter((t) => t.effort === "1h");
-  const deepWork = tasks.filter((t) => t.effort === "2h");
-  const noEstimate = tasks.filter((t) => !t.effort);
+  // Sort each category by priority
+  const quickWins = sortByPriority(tasks.filter((t) => t.effort === "15m" || t.effort === "30m"));
+  const medium = sortByPriority(tasks.filter((t) => t.effort === "1h"));
+  const deepWork = sortByPriority(tasks.filter((t) => t.effort === "2h"));
+  const noEstimate = sortByPriority(tasks.filter((t) => !t.effort));
 
   const sections = [
     { title: "Quick Wins", tasks: quickWins, icon: "quick-wins", iconSvg: boltIcon() },
@@ -809,6 +1080,40 @@ function renderBacklogByEffort(tasks) {
       backlogContent.appendChild(createBacklogSection(section));
     }
   });
+}
+
+function renderBacklogByPriority(tasks) {
+  // Sort all tasks by priority score
+  const sorted = sortByPriority(tasks);
+
+  // Group into priority tiers based on score
+  const critical = sorted.filter(t => calculatePriorityScore(t) >= 8);
+  const high = sorted.filter(t => {
+    const score = calculatePriorityScore(t);
+    return score >= 5 && score < 8;
+  });
+  const normal = sorted.filter(t => {
+    const score = calculatePriorityScore(t);
+    return score >= 1 && score < 5;
+  });
+  const unranked = sorted.filter(t => calculatePriorityScore(t) < 1);
+
+  const sections = [
+    { title: "Critical Priority", tasks: critical, icon: "quick-wins", iconSvg: flameIcon() },
+    { title: "High Priority", tasks: high, icon: "this-week", iconSvg: starIcon() },
+    { title: "Normal", tasks: normal, icon: "medium", iconSvg: clockIcon() },
+    { title: "Unranked", tasks: unranked, icon: "no-estimate", iconSvg: questionIcon() },
+  ];
+
+  sections.forEach((section) => {
+    if (section.tasks.length > 0) {
+      backlogContent.appendChild(createBacklogSection(section));
+    }
+  });
+}
+
+function starIcon() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
 }
 
 function createBacklogSection({ title, tasks, icon, iconSvg }) {
@@ -1024,6 +1329,10 @@ function addCard(title) {
     createdAt: new Date().toISOString(),
     description: "",
     expanded: false,
+    // Weight fields for priority scoring
+    impact: null,    // "high" | "medium" | "low" | null
+    urgency: null,   // "high" | "medium" | "low" | null
+    blockedBy: null, // task ID or null
   };
   boardState.tasks.push(card);
   saveState();
@@ -1060,6 +1369,14 @@ navLinks.forEach((link) => {
     setActiveView(nextView);
   });
 });
+
+if (defaultViewSelect) {
+  defaultViewSelect.value = settings.defaultView || "board";
+  defaultViewSelect.addEventListener("change", () => {
+    settings.defaultView = defaultViewSelect.value;
+    saveSettings();
+  });
+}
 
 cancelButton.addEventListener("click", closeModal);
 
@@ -1131,7 +1448,11 @@ function setActiveView(view) {
     link.classList.toggle("active", link.dataset.view === activeView);
   });
   viewPanels.forEach((panel) => {
-    panel.classList.toggle("is-active", panel.dataset.viewPanel === activeView);
+    const panelView = panel.dataset.viewPanel;
+    const matches =
+      panelView === activeView ||
+      (panelView === "board-header" && activeView === "board");
+    panel.classList.toggle("is-active", matches);
   });
   if (activeView === "today") {
     renderToday();
@@ -1139,4 +1460,8 @@ function setActiveView(view) {
   if (activeView === "backlog") {
     renderBacklog();
   }
+  if (activeView === "settings" && defaultViewSelect) {
+    defaultViewSelect.value = settings.defaultView || "board";
+  }
+  focusToggle.classList.toggle("is-hidden", activeView !== "board");
 }

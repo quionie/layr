@@ -62,8 +62,8 @@
 
 body {
   margin: 0;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
-    "Helvetica Neue", Arial, sans-serif;
+  font-family: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue",
+    Arial, sans-serif;
   color: var(--text-primary);
   background: var(--bg-base);
   min-height: 100vh;
@@ -136,6 +136,11 @@ body {
   border-radius: var(--radius-sm);
   transition: all 0.15s ease;
   position: relative;
+  background: transparent;
+  border: none;
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
 }
 
 .nav-link:hover {
@@ -186,6 +191,10 @@ body {
   border-color: var(--accent);
   color: var(--accent);
   box-shadow: var(--glow-accent);
+}
+
+.focus-toggle.is-hidden {
+  display: none;
 }
 
 /* Sidebar Footer */
@@ -247,6 +256,7 @@ body {
   gap: 24px;
 }
 
+
 /* Layer Toggles */
 .layer-toggles {
   display: flex;
@@ -292,6 +302,12 @@ body {
   gap: 8px;
 }
 
+.board-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .stat {
   font-size: 13px;
   color: var(--text-muted);
@@ -335,6 +351,68 @@ body {
   flex: 1;
   overflow: auto;
   width: 100%;
+}
+
+/* Settings View */
+.settings-view {
+  padding: 24px 28px 48px;
+  max-width: 720px;
+  margin: 0 auto;
+  flex: 1;
+  overflow: auto;
+}
+
+.settings-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.settings-header p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.settings-section {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-section h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.settings-section label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.settings-section select {
+  width: min(280px, 100%);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-size: 14px;
 }
 
 .today-container {
@@ -540,6 +618,63 @@ body {
 }
 
 /* Today Empty State */
+/* Top Pick Banner - "What should I work on?" */
+.today-top-pick {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.1) 0%, rgba(129, 140, 248, 0.1) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 28px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.today-top-pick:hover {
+  border-color: rgba(168, 85, 247, 0.4);
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(129, 140, 248, 0.15) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.15);
+}
+
+.top-pick-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #a855f7;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.top-pick-header svg {
+  width: 14px;
+  height: 14px;
+}
+
+.top-pick-score {
+  margin-left: auto;
+  background: rgba(168, 85, 247, 0.2);
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 10px;
+}
+
+.top-pick-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+
+.top-pick-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
 .today-empty {
   display: flex;
   flex-direction: column;
@@ -691,6 +826,7 @@ body {
 
 /* Card */
 .card {
+  position: relative;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -808,6 +944,109 @@ body.layer-time .card .layer-time-info.is-overdue ~ .card-title {
 .card-chip-effort {
   background: var(--bg-muted);
   color: var(--text-muted);
+}
+
+/* Weight Layer Chips */
+.card-chip-impact,
+.card-chip-urgency,
+.card-chip-blocked {
+  display: none;
+}
+
+body.layer-weight .card-chip-impact,
+body.layer-weight .card-chip-urgency,
+body.layer-weight .card-chip-blocked {
+  display: inline-flex;
+}
+
+/* Impact chips */
+.card-chip-impact {
+  background: rgba(99, 102, 241, 0.12);
+  color: #6366f1;
+}
+
+.card-chip-impact.impact-high {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+}
+
+.card-chip-impact.impact-medium {
+  background: rgba(99, 102, 241, 0.12);
+  color: #6366f1;
+}
+
+.card-chip-impact.impact-low {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+
+/* Urgency chips */
+.card-chip-urgency.urgency-high {
+  background: var(--error-muted);
+  color: var(--error);
+}
+
+.card-chip-urgency.urgency-medium {
+  background: var(--warning-muted);
+  color: var(--warning);
+}
+
+.card-chip-urgency.urgency-low {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+
+/* Blocked chip */
+.card-chip-blocked {
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--error);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+}
+
+/* Weight row visibility */
+.card-weight-row,
+.card-blocked-section {
+  display: none;
+}
+
+body.layer-weight .card-weight-row,
+body.layer-weight .card-blocked-section {
+  display: grid;
+}
+
+body.layer-weight .card-blocked-section {
+  display: flex;
+}
+
+/* High priority card indicator when weight layer active */
+body.layer-weight .card[data-impact="high"][data-urgency="high"] {
+  border-left: 3px solid var(--error);
+}
+
+body.layer-weight .card[data-impact="high"]:not([data-urgency="high"]) {
+  border-left: 3px solid #a855f7;
+}
+
+body.layer-weight .card.is-blocked {
+  opacity: 0.7;
+}
+
+body.layer-weight .card.is-blocked::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 10px,
+    rgba(239, 68, 68, 0.03) 10px,
+    rgba(239, 68, 68, 0.03) 20px
+  );
+  pointer-events: none;
+  border-radius: inherit;
 }
 
 /* Card Body - Expandable edit area */
