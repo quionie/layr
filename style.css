@@ -2276,7 +2276,7 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  cursor: pointer;
+  cursor: grab;
   transition: all 0.15s ease;
   z-index: 2;
   overflow: hidden;
@@ -2287,6 +2287,34 @@ select:focus-visible {
   color: var(--bg-base);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md), var(--glow-accent);
+}
+
+.timeline-task-bar.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+  transform: scale(0.95);
+  pointer-events: none;
+}
+
+/* While dragging, make all task bars non-interactive so drops hit the cells */
+body.is-dragging-timeline .timeline-task-bar:not(.dragging),
+body.is-dragging-timeline .timeline-milestone:not(.dragging) {
+  pointer-events: none;
+}
+
+/* Make cells more visible as drop targets while dragging */
+body.is-dragging-timeline .timeline-cell {
+  transition: background 0.1s ease;
+}
+
+body.is-dragging-timeline .timeline-cell:hover {
+  background: var(--accent-muted);
+}
+
+.timeline-milestone.dragging {
+  opacity: 0.5;
+  transform: translate(-50%, -50%) scale(1.5);
+  pointer-events: none;
 }
 
 .timeline-task-bar:hover .timeline-task-title {
@@ -2349,7 +2377,7 @@ select:focus-visible {
   border: 2px solid var(--bg-elevated);
   border-radius: 50%;
   z-index: 3;
-  cursor: pointer;
+  cursor: grab;
   transition: all 0.15s ease;
 }
 
@@ -2476,6 +2504,7 @@ select:focus-visible {
 .timeline-unscheduled-item.dragging {
   opacity: 0.5;
   cursor: grabbing;
+  pointer-events: none;
 }
 
 .timeline-unscheduled-empty {
@@ -2486,18 +2515,26 @@ select:focus-visible {
   width: 100%;
 }
 
+.timeline-unscheduled-list.drop-target {
+  background: var(--accent-muted);
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
 /* Drop zones */
 .timeline-cell.drop-target {
-  background: var(--accent-muted);
+  background: var(--accent-muted) !important;
+  z-index: 5;
 }
 
 .timeline-cell.drop-target::after {
   content: "";
   position: absolute;
-  inset: 4px;
+  inset: 2px;
   border: 2px dashed var(--accent);
   border-radius: var(--radius-xs);
   pointer-events: none;
+  background: rgba(129, 140, 248, 0.1);
 }
 
 /* Timeline Responsive */

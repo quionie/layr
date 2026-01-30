@@ -116,8 +116,8 @@ function saveState() {
 
 function formatRelativeDue(dueDate) {
   if (!dueDate) return "";
-  const due = new Date(dueDate);
-  if (Number.isNaN(due.getTime())) return "";
+  const due = parseLocalDate(dueDate);
+  if (!due) return "";
   const today = new Date();
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const target = new Date(due.getFullYear(), due.getMonth(), due.getDate());
@@ -147,12 +147,41 @@ function formatRelativeTime(dateString) {
 
 function toDateInputValue(dateValue) {
   if (!dateValue) return "";
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) return "";
+  const date = parseLocalDate(dateValue);
+  if (!date) return "";
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
   const day = `${date.getDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function toLocalDateString(date) {
+  if (!date) return "";
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDate(dateValue) {
+  if (!dateValue) return null;
+  if (dateValue instanceof Date) {
+    if (Number.isNaN(dateValue.getTime())) return null;
+    return new Date(dateValue.getFullYear(), dateValue.getMonth(), dateValue.getDate());
+  }
+  if (typeof dateValue === "string") {
+    const match = dateValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]) - 1;
+      const day = Number(match[3]);
+      const parsed = new Date(year, month, day);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+  }
+  const fallback = new Date(dateValue);
+  if (Number.isNaN(fallback.getTime())) return null;
+  return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
 }
 
 function findTask(cardId) {
@@ -667,8 +696,8 @@ function renderBoard() {
 
 function isDueToday(dueDate) {
   if (!dueDate) return false;
-  const due = new Date(dueDate);
-  if (Number.isNaN(due.getTime())) return false;
+  const due = parseLocalDate(dueDate);
+  if (!due) return false;
   const now = new Date();
   return (
     due.getFullYear() === now.getFullYear() &&
@@ -679,12 +708,11 @@ function isDueToday(dueDate) {
 
 function isOverdue(dueDate) {
   if (!dueDate) return false;
-  const due = new Date(dueDate);
-  if (Number.isNaN(due.getTime())) return false;
+  const due = parseLocalDate(dueDate);
+  if (!due) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-  return dueDay < today;
+  return due < today;
 }
 
 // ==================== PRIORITY SCORING ====================
@@ -958,40 +986,37 @@ function getBacklogTasks() {
 
 function isThisWeek(dueDate) {
   if (!dueDate) return false;
-  const due = new Date(dueDate);
-  if (Number.isNaN(due.getTime())) return false;
+  const due = parseLocalDate(dueDate);
+  if (!due) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const endOfWeek = new Date(today);
   endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
-  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-  return dueDay > today && dueDay <= endOfWeek;
+  return due > today && due <= endOfWeek;
 }
 
 function isNextWeek(dueDate) {
   if (!dueDate) return false;
-  const due = new Date(dueDate);
-  if (Number.isNaN(due.getTime())) return false;
+  const due = parseLocalDate(dueDate);
+  if (!due) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const endOfThisWeek = new Date(today);
   endOfThisWeek.setDate(today.getDate() + (7 - today.getDay()));
   const endOfNextWeek = new Date(endOfThisWeek);
   endOfNextWeek.setDate(endOfThisWeek.getDate() + 7);
-  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-  return dueDay > endOfThisWeek && dueDay <= endOfNextWeek;
+  return due > endOfThisWeek && due <= endOfNextWeek;
 }
 
 function isLater(dueDate) {
   if (!dueDate) return false;
-  const due = new Date(dueDate);
-  if (Number.isNaN(due.getTime())) return false;
+  const due = parseLocalDate(dueDate);
+  if (!due) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const endOfNextWeek = new Date(today);
   endOfNextWeek.setDate(today.getDate() + (14 - today.getDay()));
-  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-  return dueDay > endOfNextWeek;
+  return due > endOfNextWeek;
 }
 
 function renderBacklog() {
@@ -1231,7 +1256,7 @@ function createBacklogItem(task) {
     const found = findTask(task.id);
     if (found) {
       const today = new Date();
-      found.task.dueDate = today.toISOString().split("T")[0];
+      found.task.dueDate = toLocalDateString(today);
       saveState();
       renderBacklog();
       renderBoard();
@@ -1361,8 +1386,8 @@ function getUnscheduledTasks() {
 
 function getTaskDayIndex(task, days) {
   if (!task.dueDate) return -1;
-  const taskDate = new Date(task.dueDate);
-  taskDate.setHours(0, 0, 0, 0);
+  const taskDate = parseLocalDate(task.dueDate);
+  if (!taskDate) return -1;
 
   for (let i = 0; i < days.length; i++) {
     if (isSameDay(days[i].date, taskDate)) {
@@ -1436,7 +1461,10 @@ function renderTimeline() {
     tasksInView.sort((a, b) => {
       if (a.status === "doing" && b.status !== "doing") return -1;
       if (b.status === "doing" && a.status !== "doing") return 1;
-      return new Date(a.dueDate) - new Date(b.dueDate);
+      const aDate = parseLocalDate(a.dueDate);
+      const bDate = parseLocalDate(b.dueDate);
+      if (!aDate || !bDate) return 0;
+      return aDate - bDate;
     });
 
     if (tasksInView.length === 0) {
@@ -1468,7 +1496,7 @@ function renderTimeline() {
           cell.className = "timeline-cell";
           if (day.isToday) cell.classList.add("is-today");
           if (day.isWeekend) cell.classList.add("is-weekend");
-          cell.dataset.date = day.date.toISOString().split("T")[0];
+          cell.dataset.date = toLocalDateString(day.date);
 
           // Add drop zone behavior
           cell.addEventListener("dragover", (e) => {
@@ -1501,6 +1529,8 @@ function renderTimeline() {
         if (taskDayIndex !== -1) {
           const taskBar = document.createElement("div");
           taskBar.className = "timeline-task-bar";
+          taskBar.draggable = true;
+          taskBar.dataset.taskId = task.id;
           if (task.status === "doing") taskBar.classList.add("status-doing");
           if (task.status === "done") taskBar.classList.add("status-done");
           if (isOverdue(task.dueDate) && task.status !== "done") {
@@ -1514,8 +1544,28 @@ function renderTimeline() {
 
           taskBar.innerHTML = `<span class="timeline-task-title">${escapeHtml(task.title)}</span>`;
 
+          // Drag to reschedule
+          taskBar.addEventListener("dragstart", (e) => {
+            e.dataTransfer.setData("text/plain", task.id);
+            e.dataTransfer.effectAllowed = "move";
+            // Use setTimeout to add classes after drag image is captured
+            setTimeout(() => {
+              taskBar.classList.add("dragging");
+              document.body.classList.add("is-dragging-timeline");
+            }, 0);
+          });
+
+          taskBar.addEventListener("dragend", () => {
+            taskBar.classList.remove("dragging");
+            document.body.classList.remove("is-dragging-timeline");
+            // Clear all drop targets
+            document.querySelectorAll(".drop-target").forEach(el => el.classList.remove("drop-target"));
+          });
+
           // Click to navigate to board
-          taskBar.addEventListener("click", () => {
+          taskBar.addEventListener("click", (e) => {
+            // Don't navigate if we just finished dragging
+            if (e.defaultPrevented) return;
             setActiveView("board");
             setTimeout(() => {
               const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
@@ -1546,7 +1596,7 @@ function renderTimeline() {
         cell.className = "timeline-cell";
         if (day.isToday) cell.classList.add("is-today");
         if (day.isWeekend) cell.classList.add("is-weekend");
-        cell.dataset.date = day.date.toISOString().split("T")[0];
+        cell.dataset.date = toLocalDateString(day.date);
 
         // Show day number in month view
         const dayLabel = document.createElement("span");
@@ -1579,13 +1629,16 @@ function renderTimeline() {
 
         // Find tasks for this day
         const dayTasks = scheduledTasks.filter(t => {
-          const tDate = new Date(t.dueDate);
+          const tDate = parseLocalDate(t.dueDate);
+          if (!tDate) return false;
           return isSameDay(tDate, day.date);
         });
 
         dayTasks.forEach(task => {
           const dot = document.createElement("div");
           dot.className = "timeline-milestone";
+          dot.draggable = true;
+          dot.dataset.taskId = task.id;
           if (task.status === "doing") {
             dot.style.background = "var(--warning)";
           } else if (isOverdue(task.dueDate)) {
@@ -1593,7 +1646,25 @@ function renderTimeline() {
           }
           dot.title = task.title;
           dot.style.left = "50%";
-          dot.addEventListener("click", () => {
+
+          // Drag to reschedule
+          dot.addEventListener("dragstart", (e) => {
+            e.dataTransfer.setData("text/plain", task.id);
+            e.dataTransfer.effectAllowed = "move";
+            setTimeout(() => {
+              dot.classList.add("dragging");
+              document.body.classList.add("is-dragging-timeline");
+            }, 0);
+          });
+
+          dot.addEventListener("dragend", () => {
+            dot.classList.remove("dragging");
+            document.body.classList.remove("is-dragging-timeline");
+            document.querySelectorAll(".drop-target").forEach(el => el.classList.remove("drop-target"));
+          });
+
+          dot.addEventListener("click", (e) => {
+            if (e.defaultPrevented) return;
             setActiveView("board");
             setTimeout(() => {
               const cardEl = document.querySelector(`.card[data-id="${task.id}"]`);
@@ -1627,7 +1698,7 @@ function renderTimelineUnscheduled(tasks) {
   if (tasks.length === 0) {
     const empty = document.createElement("div");
     empty.className = "timeline-unscheduled-empty";
-    empty.textContent = "All tasks are scheduled";
+    empty.textContent = "All tasks are scheduled — drop here to unschedule";
     timelineUnscheduledList.appendChild(empty);
     return;
   }
@@ -1641,11 +1712,17 @@ function renderTimelineUnscheduled(tasks) {
 
     item.addEventListener("dragstart", (e) => {
       e.dataTransfer.setData("text/plain", task.id);
-      item.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      setTimeout(() => {
+        item.classList.add("dragging");
+        document.body.classList.add("is-dragging-timeline");
+      }, 0);
     });
 
     item.addEventListener("dragend", () => {
       item.classList.remove("dragging");
+      document.body.classList.remove("is-dragging-timeline");
+      document.querySelectorAll(".drop-target").forEach(el => el.classList.remove("drop-target"));
     });
 
     // Click to go to board
@@ -1693,6 +1770,35 @@ if (timelineNextBtn) {
 
 if (timelineTodayBtn) {
   timelineTodayBtn.addEventListener("click", goToTimelineToday);
+}
+
+// Unscheduled drop zone - drag here to remove due date
+if (timelineUnscheduledList) {
+  timelineUnscheduledList.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    timelineUnscheduledList.classList.add("drop-target");
+  });
+
+  timelineUnscheduledList.addEventListener("dragleave", (e) => {
+    if (!timelineUnscheduledList.contains(e.relatedTarget)) {
+      timelineUnscheduledList.classList.remove("drop-target");
+    }
+  });
+
+  timelineUnscheduledList.addEventListener("drop", (e) => {
+    e.preventDefault();
+    timelineUnscheduledList.classList.remove("drop-target");
+    const taskId = e.dataTransfer.getData("text/plain");
+    if (taskId) {
+      const found = findTask(taskId);
+      if (found && found.task.dueDate) {
+        found.task.dueDate = null;
+        saveState();
+        renderTimeline();
+        renderBoard();
+      }
+    }
+  });
 }
 
 timelineModeBtns.forEach(btn => {
